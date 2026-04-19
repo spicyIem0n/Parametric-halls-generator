@@ -1,0 +1,59 @@
+import React, { useState, useEffect } from 'react';
+import Controls from './components/Controls';
+import Scene3D from './components/Scene3D';
+import { generateHallParameters } from './api';
+
+// Baza danych płyt warstwowych oparta na oficjalnym katalogu Ruukki
+export const RUUKKI_CATALOG = {
+  "SP2B_E_PIR_100": { name: "SP2B E-PIR", core: "PIR", thickness: 100, uValue: 0.22, fire: "EI 15", modularWidth: 1100, img: "standard_pir" },
+  "SP2B_E_PIR_150": { name: "SP2B E-PIR", core: "PIR", thickness: 150, uValue: 0.14, fire: "EI 20", modularWidth: 1100, img: "standard_pir" },
+  "SP2E_X_PIR_120": { name: "SP2E X-PIR Energy", core: "PIR", thickness: 120, uValue: 0.18, fire: "EI 30", modularWidth: 1100, img: "energy_pir" },
+  "SP2E_X_PIR_160": { name: "SP2E X-PIR Energy", core: "PIR", thickness: 160, uValue: 0.14, fire: "EI 60", modularWidth: 1100, img: "energy_pir" },
+  "nSPB_WE_100": { name: "nSPB WE", core: "Wełna Mineralna", thickness: 100, uValue: 0.39, fire: "EI 60", modularWidth: 1100, img: "standard_wool" },
+  "nSPB_WE_150": { name: "nSPB WE", core: "Wełna Mineralna", thickness: 150, uValue: 0.26, fire: "EI 120", modularWidth: 1100, img: "standard_wool" }
+};
+
+const App = () => {
+  //... (Górna część i baza Ruukki pozostają bez zmian) ...
+  const [params, setParams] = useState({
+    hall_type: 'simple', length: 60, width: 30, clear_height: 8, number_of_aisles: 1, roof_angle: 5, bay_spacing: 6,
+    floor_thickness: 0.2, floor_base_type: 'lean_concrete', floor_base_thickness: 0.15,
+    foundation_method: 'default', foundation_depth: 1.0, 
+    left_dock_zone: false, right_dock_zone: false, dock_foundation_depth: 2.0,
+    manual_sizes: { external_main: [2.5, 4.0, 0.45], internal_main: [2.5, 2.5, 0.45], intermediate_cladding: [1.5, 1.5, 0.40], external_dock: [2.7, 3.5, 0.45], internal_dock: [2.5, 3.7, 0.45] },
+    column_method: 'default',
+    manual_column_sections: { external_main: [0.4, 0.4], internal_main: [0.4, 0.4], intermediate_cladding: [0.3, 0.3], external_dock: [0.5, 0.5], internal_dock: [0.5, 0.5] },
+    has_cladding: true, cladding_orientation: 'horizontal', cladding_panel_id: 'SP2B_E_PIR_100', cladding_thickness: 0.1, cladding_bottom_level: 0.25,
+    plinth_thickness: 0.24, plinth_top_level: 0.30, purlin_spacing: 2.0, roof_panel_thickness: 0.15, truss_depth: 0.8,
+    // NOWE: Parametry odwodnienia
+    roof_drainage_type: 'vacuum', drainage_zones_x: 2, drainage_zones_z: 3, roof_slope_percent: 2.0
+  });
+//... (Reszta App.jsx bez zmian) ...
+
+  const [components, setComponents] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Funkcja aktualizująca grubość panelu do API po wybraniu go z katalogu
+  const handlePanelChange = (panelId) => {
+    const selectedPanel = RUUKKI_CATALOG[panelId];
+    setParams(prev => ({ ...prev, cladding_panel_id: panelId, cladding_thickness: selectedPanel.thickness / 1000 }));
+  };
+
+  const handleGenerate = async () => {
+    setIsLoading(true);
+    const data = await generateHallParameters(params);
+    if (data && data.components) setComponents(data.components);
+    setIsLoading(false);
+  };
+
+  useEffect(() => { handleGenerate(); }, []);
+
+  return (
+    <div className="flex h-screen w-screen overflow-hidden bg-gray-100 font-sans">
+      <Controls params={params} setParams={setParams} onGenerate={handleGenerate} isLoading={isLoading} onPanelChange={handlePanelChange} catalog={RUUKKI_CATALOG} />
+      <Scene3D components={components} />
+    </div>
+  );
+};
+
+export default App;
