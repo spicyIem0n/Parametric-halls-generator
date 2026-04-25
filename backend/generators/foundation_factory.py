@@ -23,7 +23,12 @@ class FoundationFactory:
                 is_external = is_left_ext or is_right_ext
                 
                 # Sprawdzenie strefy dokowej dla danej ściany
-                is_dock_here = (is_left_ext and params.left_dock_zone) or (is_right_ext and params.right_dock_zone)
+               # Sprawdzenie strefy dokowej dla danej ściany w nowej mapie
+                is_dock_here = False
+                if is_left_ext and params.docks_config.get(f"left-{i}") == "dock":
+                    is_dock_here = True
+                elif is_right_ext and params.docks_config.get(f"right-{i}") == "dock":
+                    is_dock_here = True
                 
                 if is_external:
                     f_type = "external_dock" if is_dock_here else "external_main"

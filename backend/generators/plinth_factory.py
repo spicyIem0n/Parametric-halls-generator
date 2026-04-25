@@ -10,12 +10,13 @@ class PlinthFactory:
         # Pobranie głębokości fundamentów dla określenia spodu podwaliny
         f_sizes = FoundationFactory.DEFAULT_SIZES if params.foundation_method != "manual" else params.manual_sizes
         
-        # Oś podłużna (ściany boczne)
+       # Oś podłużna (ściany boczne)
         for i in range(num_frames - 1):
             z_center = (i * params.bay_spacing) + (params.bay_spacing / 2) - (params.length / 2)
             
-            # Lewa i prawa strona (obliczenie wysokości)
-            for side, is_dock in [("left", params.left_dock_zone), ("right", params.right_dock_zone)]:
+            # Lewa i prawa strona (obliczenie wysokości z nowej mapy doków)
+            for side in ["left", "right"]:
+                is_dock = params.docks_config.get(f"{side}-{i}") == "dock"
                 f_type = "external_dock" if is_dock else "external_main"
                 f_thickness = f_sizes.get(f_type, FoundationFactory.DEFAULT_SIZES["external_main"])[2]
                 f_depth = params.dock_foundation_depth if is_dock else params.foundation_depth

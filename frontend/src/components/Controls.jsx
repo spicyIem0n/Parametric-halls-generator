@@ -1,5 +1,95 @@
 import React from 'react';
 
+// --- NOWY KOMPONENT: INTERAKTYWNA MAPA DOKÓW ---
+const DockGridSelector = ({ params, setParams }) => {
+  const numBays = Math.round(params.length / params.bay_spacing);
+  
+  const toggleDock = (side, bayIndex) => {
+    const key = `${side}-${bayIndex}`;
+    const current = params.docks_config[key] || 'none';
+    let next = 'none';
+    
+    if (current === 'none') next = 'dock';
+    else if (current === 'dock') next = 'gate';
+    else next = 'none';
+
+    const newConfig = { ...params.docks_config };
+    if (next === 'none') delete newConfig[key];
+    else newConfig[key] = next;
+    
+    setParams({ ...params, docks_config: newConfig });
+  };
+
+  const fillSide = (side) => {
+    const newConfig = { ...params.docks_config };
+    for (let i = 0; i < numBays; i++) {
+      newConfig[`${side}-${i}`] = 'dock';
+    }
+    setParams({ ...params, docks_config: newConfig });
+  };
+
+  const clearSide = (side) => {
+    const newConfig = { ...params.docks_config };
+    for (let i = 0; i < numBays; i++) {
+      delete newConfig[`${side}-${i}`];
+    }
+    setParams({ ...params, docks_config: newConfig });
+  };
+
+  return (
+    <div className="mt-4 p-3 bg-white rounded-lg border border-gray-200 shadow-sm">
+      <div className="flex justify-between items-center mb-3">
+        <h3 className="text-[10px] font-bold text-gray-700 uppercase tracking-wider">Logistyka i Bramy (Mapa Pól)</h3>
+        <div className="flex gap-1">
+           <button onClick={() => fillSide('left')} className="text-[8px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded border border-blue-100 hover:bg-blue-100">Wszystkie L</button>
+           <button onClick={() => clearSide('left')} className="text-[8px] bg-red-50 text-red-600 px-1.5 py-0.5 rounded border border-red-100 hover:bg-red-100">Wyczyść L</button>
+           <button onClick={() => fillSide('right')} className="text-[8px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded border border-blue-100 hover:bg-blue-100">Wszystkie R</button>
+           <button onClick={() => clearSide('right')} className="text-[8px] bg-red-50 text-red-600 px-1.5 py-0.5 rounded border border-red-100 hover:bg-red-100">Wyczyść R</button>
+        </div>
+      </div>
+      
+      <div className="flex justify-between gap-4">
+        {/* Lewa Ściana */}
+        <div className="flex-1 flex flex-col gap-1">
+          <span className="text-[9px] font-bold text-center text-gray-400">LEWA</span>
+          {[...Array(numBays)].map((_, i) => (
+            <button
+              key={`L-${i}`}
+              onClick={() => toggleDock('left', i)}
+              className={`h-8 rounded text-[9px] border transition-all flex flex-col items-center justify-center font-bold
+                ${params.docks_config[`left-${i}`] === 'dock' ? 'bg-blue-500 text-white border-blue-700 shadow-inner' : 
+                  params.docks_config[`left-${i}`] === 'gate' ? 'bg-orange-500 text-white border-orange-700 shadow-inner' : 
+                  'bg-gray-50 text-gray-400 border-gray-200 hover:border-blue-300'}`}
+            >
+              <span className="opacity-50 text-[7px]">{i+1}</span>
+              {params.docks_config[`left-${i}`] === 'dock' ? 'DOK' : params.docks_config[`left-${i}`] === 'gate' ? 'BRAMA' : 'BRAK'}
+            </button>
+          ))}
+        </div>
+
+        {/* Prawa Ściana */}
+        <div className="flex-1 flex flex-col gap-1">
+          <span className="text-[9px] font-bold text-center text-gray-400">PRAWA</span>
+          {[...Array(numBays)].map((_, i) => (
+            <button
+              key={`R-${i}`}
+              onClick={() => toggleDock('right', i)}
+              className={`h-8 rounded text-[9px] border transition-all flex flex-col items-center justify-center font-bold
+                ${params.docks_config[`right-${i}`] === 'dock' ? 'bg-blue-500 text-white border-blue-700 shadow-inner' : 
+                  params.docks_config[`right-${i}`] === 'gate' ? 'bg-orange-500 text-white border-orange-700 shadow-inner' : 
+                  'bg-gray-50 text-gray-400 border-gray-200 hover:border-blue-300'}`}
+            >
+              <span className="opacity-50 text-[7px]">{i+1}</span>
+              {params.docks_config[`right-${i}`] === 'dock' ? 'DOK' : params.docks_config[`right-${i}`] === 'gate' ? 'BRAMA' : 'BRAK'}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+
 const Controls = ({ params, setParams, onGenerate, isLoading, onPanelChange, catalog }) => {
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -116,6 +206,15 @@ const Controls = ({ params, setParams, onGenerate, isLoading, onPanelChange, cat
                       <input type="range" name="roof_angle" min="2" max="35" step="1" value={params.roof_angle} onChange={handleChange} className="w-full h-1 bg-gray-200 rounded appearance-none" />
                     </div>
                   )}
+
+                  {/* DODANY SUWAK ROZSTAWU PŁATWI Z POPRZEDNIEJ ITERACJI */}
+                  <div className="flex flex-col gap-1 mt-3 pt-3 border-t border-gray-200 border-dashed">
+                    <div className="flex justify-between text-[10px] font-bold text-gray-500 uppercase">
+                      <label>Max. rozstaw płatwi (wg tablic) [m]</label>
+                      <span className="text-blue-600">{params.purlin_spacing}</span>
+                    </div>
+                    <input type="range" name="purlin_spacing" min="1" max="4" step="0.5" value={params.purlin_spacing} onChange={handleChange} className="w-full h-1 bg-gray-200 rounded appearance-none accent-blue-600" />
+                  </div>
                 </div>
               </div>
 
@@ -165,23 +264,14 @@ const Controls = ({ params, setParams, onGenerate, isLoading, onPanelChange, cat
               )}
             </div>
 
-            {/* 4. FUNDAMENTY & DOKI */}
+            {/* 4. FUNDAMENTY & DOKI (ZINTEGROWANA MAPA DOKÓW) */}
             <div className="border-t pt-4">
               <h3 className="text-[11px] font-black text-blue-900 uppercase mb-3">4. Fundamenty & Doki</h3>
               
-              <div className="bg-orange-50 border border-orange-200 p-3 rounded mb-3">
-                <span className="text-[10px] font-bold text-orange-800 uppercase block mb-2">Strefy Dokowe (Nawy Zewnętrzne)</span>
-                <div className="flex justify-between gap-2">
-                  <label className="flex items-center gap-1 text-[10px] font-bold text-gray-700 cursor-pointer">
-                    <input type="checkbox" name="left_dock_zone" checked={params.left_dock_zone} onChange={handleChange} className="w-4 h-4 text-orange-600 rounded" /> Ściana Lewa
-                  </label>
-                  <label className="flex items-center gap-1 text-[10px] font-bold text-gray-700 cursor-pointer">
-                    <input type="checkbox" name="right_dock_zone" checked={params.right_dock_zone} onChange={handleChange} className="w-4 h-4 text-orange-600 rounded" /> Ściana Prawa
-                  </label>
-                </div>
-              </div>
+              {/* NOWY KOMPONENT WYBORU DOKÓW */}
+              <DockGridSelector params={params} setParams={setParams} />
 
-              <select name="foundation_method" value={params.foundation_method} onChange={handleChange} className="w-full p-2 border rounded text-xs mb-3 font-bold bg-gray-50">
+              <select name="foundation_method" value={params.foundation_method} onChange={handleChange} className="w-full p-2 border rounded text-xs mb-3 mt-4 font-bold bg-gray-50">
                 <option value="default">Gabaryty domyślne</option>
                 <option value="manual">Gabaryty ręczne [A, B, H]</option>
               </select>
@@ -201,17 +291,17 @@ const Controls = ({ params, setParams, onGenerate, isLoading, onPanelChange, cat
                 </div>
               )}
 
-              <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-3 mt-3">
                 <div className="flex flex-col gap-1">
                   <span className="text-[10px] font-bold text-gray-400 uppercase">Zagłębienie główne [m]</span>
                   <input type="number" step="0.1" name="foundation_depth" value={params.foundation_depth} onChange={handleChange} className="w-full p-1.5 border rounded text-xs" />
                 </div>
-                {(params.left_dock_zone || params.right_dock_zone) && (
-                  <div className="flex flex-col gap-1">
-                    <span className="text-[10px] font-bold text-orange-600 uppercase">Zagłębienie dokowe [m]</span>
-                    <input type="number" step="0.1" name="dock_foundation_depth" value={params.dock_foundation_depth} onChange={handleChange} className="w-full p-1.5 border border-orange-300 bg-orange-50 rounded text-xs" />
-                  </div>
-                )}
+                
+                <div className="flex flex-col gap-1">
+                  <span className="text-[10px] font-bold text-orange-600 uppercase">Zagłębienie dokowe [m]</span>
+                  <input type="number" step="0.1" name="dock_foundation_depth" value={params.dock_foundation_depth} onChange={handleChange} className="w-full p-1.5 border border-orange-300 bg-orange-50 rounded text-xs" />
+                </div>
+                
               </div>
             </div>
 

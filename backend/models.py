@@ -15,12 +15,14 @@ class HallParameters(BaseModel):
     floor_base_type: str = "lean_concrete" 
     floor_base_thickness: float = 0.15 
 
-    # Fundamenty i Doki
+    # Fundamenty i Doki (ZMODYFIKOWANE)
     foundation_method: str = "default" 
     foundation_depth: float = 1.0 
-    left_dock_zone: bool = False  
-    right_dock_zone: bool = False 
     dock_foundation_depth: float = 2.0 
+    
+    # NOWA KONFIGURACJA DOKÓW: Słownik typu { "left-0": "dock", "right-2": "gate" }
+    docks_config: Dict[str, str] = {} 
+    
     manual_sizes: Dict[str, List[float]] = {
         "external_main": [2.5, 4.0, 0.45], "internal_main": [2.5, 2.5, 0.45],
         "intermediate_cladding": [1.5, 1.5, 0.40], "external_dock": [2.7, 3.5, 0.45], "internal_dock": [2.5, 3.7, 0.45]
