@@ -5,6 +5,7 @@ from .foundation_factory import FoundationFactory
 from .floor_factory import FloorFactory
 from .cladding_factory import CladdingFactory
 from .plinth_factory import PlinthFactory
+from .dock_factory import DockFactory
 
 class HallGenerator:
     def __init__(self, params: HallParameters):
@@ -24,8 +25,8 @@ class HallGenerator:
         components.extend(PlinthFactory.generate(self.params)) 
         components.extend(ColumnFactory.generate(self.params))
         components.extend(RoofFactory.generate(self.params))
-        # Nowy moduł doków i bram
-        # components.extend(DockFactory.generate(self.params))
         components.extend(CladdingFactory.generate(self.params))
+        components.extend(DockFactory.generate(self.params)) # Aktywacja bram i doków
         
+              
         return components

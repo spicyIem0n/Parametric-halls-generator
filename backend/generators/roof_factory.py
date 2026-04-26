@@ -87,7 +87,9 @@ class RoofFactory:
         
         # 1. SIATKA WĘZŁÓW X (Synchronizacja dla całego dachu)
         # Używamy math.ceil - rzeczywisty rozstaw zawsze będzie <= zadanemu (bezpieczne dla płyt warstwowych)
-        num_purlins_per_side = max(1, math.ceil(half_width / params.purlin_spacing))
+        # Zabezpieczenie przed zerem w rozstawie
+        safe_spacing = max(1.0, params.purlin_spacing)
+        num_purlins_per_side = max(1, math.ceil(half_width / safe_spacing))
         # Tworzymy listę pozycji X, gdzie będą węzły (osie płatwi)
         xs = []
         for p in range(num_purlins_per_side + 1):

@@ -5,6 +5,7 @@ import { OrbitControls, Grid, Sky } from '@react-three/drei';
 // Funkcja pomocnicza do mapowania typów na kategorie widoczności
 const getCategory = (type) => {
   if (type.includes('column') || type.includes('truss') || type.includes('purlin') || type.includes('girt')) return 'structure';
+  if (type.includes('dock') || type.includes('gate')) return 'cladding'; // Doki podpinamy pod widoczność obudowy
   if (type.includes('sandwich_panel')) return 'cladding';
   if (type.includes('roof')) return 'roof';
   if (type.includes('floor') || type.includes('foundation') || type.includes('plinth')) return 'foundation';
@@ -26,6 +27,9 @@ const HallElement = ({ type, position, rotation, scale, visibilities, planarOpac
   // Mapa materiałów
   if (type === 'column') {
     color = '#334155'; 
+    if (type === 'dock_door') { color = '#475569'; roughness = 0.8; metalness = 0.2; }
+    else if (type === 'gate_door') { color = '#f97316'; roughness = 0.5; metalness = 0.5; } // Pomarańczowa brama kurierska
+    else if (type === 'dock_shelter') { color = '#1e3a8a'; roughness = 0.9; metalness = 0.1; } // Granatowy fartuch
   } else if (type.startsWith('truss_')) {
     color = '#1e293b'; 
   } else if (type === 'purlin' || type === 'purlin_strut' || type === 'girt') {
