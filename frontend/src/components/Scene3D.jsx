@@ -4,15 +4,21 @@ import { OrbitControls, Grid, Sky } from '@react-three/drei';
 
 // Funkcja pomocnicza do mapowania typów na kategorie widoczności
 const getCategory = (type) => {
-  if (type.includes('column') || type.includes('truss') || type.includes('purlin') || type.includes('girt')) return 'structure';
-  if (type.includes('dock') || type.includes('gate')) return 'cladding'; // Doki podpinamy pod widoczność obudowy
+  if (type.includes('column') || type.includes('truss') || type.includes('purlin') || type.includes('girt') || type.includes('trimmer')) return 'structure';
+  if (type.includes('fire_wall') || type.includes('fire_strip')) return 'structure';
+  if (type.includes('bracing')) return 'structure';
+  if (type.includes('tech_room')) return 'structure';
+  if (type.includes('office')) return 'structure';
+  if (type.includes('mezzanine')) return 'structure';
+  if (type.includes('reserve')) return 'roof';
+  if (type.includes('dock') || type.includes('gate')) return 'cladding';
   if (type.includes('sandwich_panel')) return 'cladding';
   if (type.includes('roof')) return 'roof';
   if (type.includes('floor') || type.includes('foundation') || type.includes('plinth')) return 'foundation';
   return 'other';
 };
 
-const HallElement = ({ type, position, rotation, scale, visibilities, planarOpacity }) => {
+const HallElement = ({ type, position, rotation, scale, meta, visibilities, planarOpacity }) => {
   const category = getCategory(type);
   
   // Jeśli kategoria jest odznaczona w UI, nie renderujemy elementu
@@ -34,16 +40,55 @@ const HallElement = ({ type, position, rotation, scale, visibilities, planarOpac
     color = '#1e293b'; 
   } else if (type === 'purlin' || type === 'purlin_strut' || type === 'girt') {
     color = '#64748b'; 
+  } else if (type === 'trimmer') {
+    color = '#7c3aed'; roughness = 0.5; metalness = 0.5; // Fioletowy — wymiany
   } else if (type === 'drainage_inlet') {
     color = '#0ea5e9'; roughness = 0.2; metalness = 0.8;
   } else if (type === 'foundation') {
     color = '#94a3b8'; roughness = 0.9; metalness = 0.0;
   } else if (type === 'plinth') {
     color = '#64748b'; roughness = 0.8; metalness = 0.0;
+  } else if (type === 'fire_wall') {
+    color = '#b91c1c'; roughness = 0.9; metalness = 0.0; // Ciemnoczerwony ŚOP
+  } else if (type === 'fire_strip_roof') {
+    color = '#fbbf24'; roughness = 0.7; metalness = 0.1; // Żółty pas niepalny
+  } else if (type === 'bracing' || type === 'bracing_roof') {
+    color = '#16a34a'; roughness = 0.4; metalness = 0.6; // Zielony — stężenia
+  } else if (type === 'tech_room_wall') {
+    color = '#7f1d1d'; roughness = 0.9; metalness = 0.0; // Burgundowy — pomieszczenia techniczne
+  } else if (type === 'tech_room_slab') {
+    color = '#6b2121'; roughness = 0.9; metalness = 0.0;
+  } else if (type === 'tech_room_door') {
+    color = '#d97706'; roughness = 0.5; metalness = 0.3; // Złoty — drzwi EI
+  } else if (type === 'office_column') {
+    color = '#475569'; roughness = 0.5; metalness = 0.5;
+  } else if (type === 'office_slab' || type === 'office_roof') {
+    color = '#e2e8f0'; roughness = 0.8; metalness = 0.1;
+  } else if (type === 'office_wall') {
+    color = '#fef3c7'; roughness = 0.7; metalness = 0.1; // Kremowy
+  } else if (type === 'office_fire_wall') {
+    color = '#b91c1c'; roughness = 0.9; metalness = 0.0; // Czerwony ppoż
+  } else if (type === 'office_stairs') {
+    color = '#6b7280'; roughness = 0.6; metalness = 0.3;
+  } else if (type === 'mezzanine_column') {
+    color = '#64748b'; roughness = 0.5; metalness = 0.4;
+  } else if (type === 'mezzanine_fire_wall') {
+    color = '#be185d'; roughness = 0.9; metalness = 0.0; // Różowoczerwony
+  } else if (type === 'mezzanine_balustrade') {
+    color = '#a3a3a3'; roughness = 0.4; metalness = 0.7;
+  } else if (type === 'mezzanine_stairs') {
+    color = '#6b7280'; roughness = 0.6; metalness = 0.3;
+  } else if (type === 'reserve_purlin_doubled') {
+    color = '#ea580c'; roughness = 0.4; metalness = 0.6; // Pomarańczowy — zdublowane płatwie
+  } else if (type === 'reserve_truss_marker') {
+    color = '#f97316'; roughness = 0.3; metalness = 0.7; // Jasny pomarańcz — dźwigary w strefie
+  } else if (type === 'reserve_zone_marker') {
+    color = '#fbbf24'; roughness = 0.5; metalness = 0.2; // Żółty marker strefy
+    transparent = true; opacity = 0.3;
   } 
 
   // --- LOGIKA TRANSPARENTNOŚCI DLA PŁASZCZYZN ---
-  const isPlanar = ['sandwich_panel', 'sandwich_panel_v', 'roof_panel', 'floor_slab', 'floor_base_lean_concrete', 'floor_base_cement_stabilized'].includes(type);
+  const isPlanar = ['sandwich_panel', 'sandwich_panel_v', 'roof_panel', 'floor_slab', 'floor_base_lean_concrete', 'floor_base_cement_stabilized', 'office_slab', 'office_roof', 'mezzanine_slab'].includes(type);
   
   if (isPlanar) {
     if (type.includes('sandwich')) color = '#f8fafc';
@@ -52,6 +97,21 @@ const HallElement = ({ type, position, rotation, scale, visibilities, planarOpac
     
     transparent = true;
     opacity = planarOpacity;
+  }
+
+  // --- NADPISANIE KOLORU DLA ELEMENTÓW Z WYMAGANIAMI PPOŻ ---
+  if (meta && meta.fire_rating && meta.fire_rating !== 'none') {
+    // Elementy z wymaganą ochroną ppoż — podświetlenie na pomarańczowo/czerwono
+    const rating = meta.fire_rating;
+    if (rating.includes('240') || rating.includes('120')) {
+      color = '#dc2626'; // Czerwony — wysokie wymagania (R120+)
+    } else if (rating.includes('60')) {
+      color = '#ea580c'; // Pomarańczowy — średnie wymagania (R60)
+    } else {
+      color = '#f59e0b'; // Żółty — niskie wymagania (R15/R30)
+    }
+    roughness = 0.4;
+    metalness = 0.6;
   }
 
   return (

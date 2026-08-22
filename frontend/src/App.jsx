@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Controls from './components/Controls';
 import Scene3D from './components/Scene3D';
-import { generateHallParameters } from './api';
+import { generateHallParameters, validateHall } from './api';
 
 // Baza danych płyt warstwowych oparta na oficjalnym katalogu Ruukki
 export const RUUKKI_CATALOG = {
@@ -26,12 +26,21 @@ const App = () => {
     has_cladding: true, cladding_orientation: 'horizontal', cladding_panel_id: 'SP2B_E_PIR_100', cladding_thickness: 0.1, cladding_bottom_level: 0.25,
     plinth_thickness: 0.24, plinth_top_level: 0.30, purlin_spacing: 2.0, roof_panel_thickness: 0.15, truss_depth: 0.8,
     // NOWE: Parametry odwodnienia
-    roof_drainage_type: 'vacuum', drainage_zones_x: 2, drainage_zones_z: 3, roof_slope_percent: 2.0
+    roof_drainage_type: 'vacuum', drainage_zones_x: 2, drainage_zones_z: 3, roof_slope_percent: 2.0,
+    // NOWE: Wielobryłowość
+    blocks: [],
+    // NOWE: PPOŻ
+    fire_load_qd: 500, has_sprinklers: false, fire_walls: [],
+    // NOWE: Stężenia
+    bracing_config: { wall_bracing_bays: [], roof_bracing: true, bracing_type: 'x_cross' },
+    // NOWE: Pomieszczenia i biura
+    technical_rooms: [], external_offices: [], internal_offices: [], office_reserve_zones: []
   });
 //... (Reszta App.jsx bez zmian) ...
 
   const [components, setComponents] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [validation, setValidation] = useState(null);
 
   // Funkcja aktualizująca grubość panelu do API po wybraniu go z katalogu
   const handlePanelChange = (panelId) => {
@@ -43,6 +52,9 @@ const App = () => {
     setIsLoading(true);
     const data = await generateHallParameters(params);
     if (data && data.components) setComponents(data.components);
+    // Walidacja modelu
+    const validationResult = await validateHall(params);
+    setValidation(validationResult);
     setIsLoading(false);
   };
 
@@ -50,7 +62,7 @@ const App = () => {
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-gray-100 font-sans">
-      <Controls params={params} setParams={setParams} onGenerate={handleGenerate} isLoading={isLoading} onPanelChange={handlePanelChange} catalog={RUUKKI_CATALOG} />
+      <Controls params={params} setParams={setParams} onGenerate={handleGenerate} isLoading={isLoading} onPanelChange={handlePanelChange} catalog={RUUKKI_CATALOG} validation={validation} />
       <Scene3D components={components} />
     </div>
   );

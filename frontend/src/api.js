@@ -20,3 +20,24 @@ export const generateHallParameters = async (params) => {
         return { components: [] };
     }
 };
+
+export const validateHall = async (params) => {
+    try {
+        const response = await fetch(`${API_URL}/validate-hall`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(params),
+        });
+
+        if (!response.ok) {
+            throw new Error(`Błąd HTTP: ${response.status}`);
+        }
+
+        return await response.json();
+    } catch (error) {
+        console.error("Błąd walidacji:", error);
+        return { is_valid: true, clashes: [], warnings_count: 0, errors_count: 0 };
+    }
+};
