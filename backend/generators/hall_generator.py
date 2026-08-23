@@ -24,6 +24,7 @@ from .technical_room_factory import TechnicalRoomFactory
 from .external_office_factory import ExternalOfficeFactory
 from .internal_office_factory import InternalOfficeFactory
 from .reserve_zone_factory import ReserveZoneFactory
+from .roof_light_factory import RoofLightFactory
 
 
 class HallGenerator:
@@ -59,6 +60,7 @@ class HallGenerator:
         components.extend(ExternalOfficeFactory.generate(grid, self.params))
         components.extend(InternalOfficeFactory.generate(grid, self.params))
         components.extend(ReserveZoneFactory.generate(grid, self.params))
+        components.extend(RoofLightFactory.generate(grid, self.params))
 
         # Aplikuj wymogi PPOŻ do metadanych komponentów
         components = self._apply_fire_safety(components, grid)

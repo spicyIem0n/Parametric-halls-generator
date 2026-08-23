@@ -93,15 +93,56 @@ class GridSystem3D:
 
     def _compute_axes_x(self) -> List[float]:
         """
-        Oblicza pozycje osi poprzecznych (X) — od lewej do prawej.
-        Uwzględnia nawy pośrednie.
+        Oblicza pozycje osi poprzecznych (X) - od lewej do prawej.
+        Uwzglednia nawy posrednie i strefe dokowa (nierownomierne nawy).
         """
-        xs = [-self.half_width]
-        if self.params.number_of_aisles > 1:
-            aisle_width = self.width / self.params.number_of_aisles
-            for j in range(1, self.params.number_of_aisles):
+        n_aisles = self.params.number_of_aisles
+        if n_aisles <= 1:
+            return [-self.half_width, self.half_width]
+
+        # Sprawdz czy strefa dokowa jest wlaczona
+        dock_zone = getattr(self.params, "dock_zone_enabled", False)
+        if not dock_zone:
+            # Rownomierne nawy
+            aisle_width = self.width / n_aisles
+            xs = [-self.half_width]
+            for j in range(1, n_aisles):
                 xs.append(-self.half_width + j * aisle_width)
+            xs.append(self.half_width)
+            return xs
+
+        # Strefa dokowa: skrajne nawy maja zadana szerokosc
+        dock_side = getattr(self.params, "dock_zone_side", "left")
+        dock_width = getattr(self.params, "dock_zone_width", 12.0)
+        dock_aisles = min(getattr(self.params, "dock_zone_aisles", 1), n_aisles - 1)
+
+        xs = [-self.half_width]
+
+        if dock_side in ("left", "both"):
+            # Lewe nawy dokowe: kazda o szerokosci dock_width
+            for j in range(dock_aisles):
+                xs.append(-self.half_width + (j + 1) * dock_width)
+
+        if dock_side in ("right", "both"):
+            # Prawe nawy dokowe: od prawej strony
+            for j in range(dock_aisles):
+                xs.append(self.half_width - (j + 1) * dock_width)
+
+        # Reszta szerokosci dzielona rownomiernie na pozostale nawy
+        left_dock_aisles = dock_aisles if dock_side in ("left", "both") else 0
+        right_dock_aisles = dock_aisles if dock_side in ("right", "both") else 0
+        remaining_aisles = n_aisles - left_dock_aisles - right_dock_aisles
+
+        if remaining_aisles > 0:
+            left_edge = -self.half_width + left_dock_aisles * dock_width
+            right_edge = self.half_width - right_dock_aisles * dock_width
+            remaining_width = right_edge - left_edge
+            aisle_w = remaining_width / remaining_aisles
+            for j in range(1, remaining_aisles):
+                xs.append(left_edge + j * aisle_w)
+
         xs.append(self.half_width)
+        xs = sorted(list(set([round(x, 6) for x in xs])))
         return xs
 
     def _compute_axes_z(self) -> List[float]:
@@ -295,3 +336,17 @@ class GridSystem3D:
             return -ext
         else:
             return ext
+
+    def get_purlin_xs(self) -> List[float]:
+        """
+        Zwraca pozycje X platwi dachowych (ta sama siatka co w RoofFactory).
+        Jedna prawda o rozstawie platwi, uzywana przez RoofFactory i RoofLightFactory.
+        """
+        safe_spacing = max(1.0, self.params.purlin_spacing)
+        num_purlins_per_side = max(1, math.ceil(self.half_width / safe_spacing))
+        xs = []
+        for p in range(num_purlins_per_side + 1):
+            xs.append(-self.half_width + (p * (self.half_width / num_purlins_per_side)))
+        for p in range(1, num_purlins_per_side + 1):
+            xs.append(p * (self.half_width / num_purlins_per_side))
+        return sorted(set(xs))

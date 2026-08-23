@@ -30,6 +30,7 @@ const App = () => {
     floor_thickness: 0.2, floor_base_type: 'lean_concrete', floor_base_thickness: 0.15,
    foundation_method: 'default', foundation_depth: 1.0, 
     docks_config: {}, dock_foundation_depth: 1.2,
+    dock_zone_enabled: false, dock_zone_side: "left", dock_zone_width: 12, dock_zone_aisles: 1,
     manual_sizes: { external_main: [2.5, 4.0, 0.45], external_corner: [2.5, 4.0, 0.45], external_intermediate_cladding: [1.5, 1.5, 0.40], internal_main: [2.5, 2.5, 0.45] },
     column_method: 'default',
     manual_column_sections: { external_main: [0.4, 0.4], external_corner: [0.4, 0.4], external_intermediate_cladding: [0.3, 0.3], internal_main: [0.4, 0.4] },
@@ -45,7 +46,8 @@ const App = () => {
     // NOWE: Stężenia
     bracing_config: { wall_bracing_bays: [], roof_bracing: true, bracing_type: 'x_cross' },
     // NOWE: Pomieszczenia i biura
-    technical_rooms: [], external_offices: [], internal_offices: [], office_reserve_zones: []
+    technical_rooms: [], external_offices: [], internal_offices: [], office_reserve_zones: [],
+    roof_lights: [],
   });
 //... (Reszta App.jsx bez zmian) ...
 

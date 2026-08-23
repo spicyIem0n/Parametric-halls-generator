@@ -131,6 +131,24 @@ class OfficeReserveZone(BaseModel):
     separate_drainage: bool = False
 
 
+class RoofLightItem(BaseModel):
+    """Pojedyncza pozycja doswietlenia/oddymiania."""
+    item_id: str = "light_1"
+    item_type: str = "skylight"         # "skylight" | "smoke_vent" | "light_strip" | "light_strip_with_vents"
+    width: float = 2.0                  # Szerokość [m] (prostopadle do pasma = między płatwiami)
+    length: float = 3.0                 # Długość [m] (wzdłuż pasma / hali)
+    quantity: int = 4                   # Ilość sztuk
+    # Dla pasma świetlnego z klapami:
+    vent_count: int = 2                 # Ilość klap w pasmie
+    vent_length: float = 2.0            # Długość jednej klapy [m] (szer = width pasma)
+
+
+class RoofLightZoneConfig(BaseModel):
+    """Konfiguracja doswietlenia i oddymiania dla jednej strefy (magazyn lub doki)."""
+    zone_id: str = "main"              # "main" | "dock_zone"
+    items: List[RoofLightItem] = []
+
+
 # --- GŁÓWNY MODEL PARAMETRÓW ---
 
 class HallParameters(BaseModel):
@@ -154,6 +172,12 @@ class HallParameters(BaseModel):
 
     # Konfiguracja doków: { "left-0-1": "dock", "right-2-0": "gate" }
     docks_config: Dict[str, str] = {}
+
+    # Strefa dokowa (dla hal wielonawowych)
+    dock_zone_enabled: bool = False
+    dock_zone_side: str = "left"                # "left" | "right" | "both"
+    dock_zone_width: float = 12.0               # Szerokość strefy dokowej [m] (nawa skrajna)
+    dock_zone_aisles: int = 1                   # Ile naw skrajnych tworzy strefę dokową
 
     manual_sizes: Dict[str, List[float]] = {
         "external_main": [2.5, 4.0, 0.45], "external_corner": [2.5, 4.0, 0.45],
@@ -205,6 +229,9 @@ class HallParameters(BaseModel):
 
     # --- NOWE: Rezerwa pod biura ---
     office_reserve_zones: List[OfficeReserveZone] = []
+
+    # --- NOWE: Doświetlenie i oddymianie ---
+    roof_lights: List[RoofLightZoneConfig] = []
 
 
 # --- MODEL WYJŚCIOWY (bez zmian — kontrakt z frontendem) ---

@@ -11,6 +11,7 @@ const getCategory = (type) => {
   if (type.includes('office')) return 'structure';
   if (type.includes('mezzanine')) return 'structure';
   if (type.includes('reserve')) return 'roof';
+  if (type === 'skylight' || type === 'smoke_vent' || type === 'light_strip') return 'roof';
   if (type.includes('dock') || type.includes('gate')) return 'cladding';
   if (type.includes('cladding_rail')) return 'structure';
   if (type.includes('sandwich_panel')) return 'cladding';
@@ -84,6 +85,12 @@ const HallElement = ({ type, position, rotation, scale, meta, visibilities, plan
   } else if (type === 'reserve_truss_marker') {
     color = '#f97316'; roughness = 0.3; metalness = 0.7; // Jasny pomarańcz — dźwigary w strefie
   } else if (type === 'reserve_zone_marker') {
+  } else if (type === 'skylight') {
+    color = '#38bdf8'; roughness = 0.2; metalness = 0.1; transparent = true; opacity = 0.7;
+  } else if (type === 'smoke_vent') {
+    color = '#6b7280'; roughness = 0.3; metalness = 0.7;
+  } else if (type === 'light_strip') {
+    color = '#67e8f9'; roughness = 0.1; metalness = 0.1; transparent = true; opacity = 0.6;
     color = '#fbbf24'; roughness = 0.5; metalness = 0.2; // Żółty marker strefy
     transparent = true; opacity = 0.3;
   } 

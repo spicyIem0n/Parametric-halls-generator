@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 
 // --- KOMPONENT ZWIJANEJ SEKCJI ---
 const CollapsibleSection = ({ title, children, defaultOpen = false }) => {
@@ -135,9 +135,54 @@ const Controls = ({ params, setParams, onGenerate, isLoading, onPanelChange, cat
     });
   };
 
+  // --- ZAPIS / WCZYTANIE PROJEKTU ---
+  const fileInputRef = useRef(null);
+
+  const handleSaveProject = () => {
+    const data = JSON.stringify(params, null, 2);
+    const blob = new Blob([data], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    const timestamp = new Date().toISOString().slice(0, 16).replace(/[T:]/g, "-");
+    a.download = `hala_${params.width}x${params.length}_${timestamp}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleLoadProject = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const loaded = JSON.parse(evt.target.result);
+        setParams(loaded);
+      } catch (err) {
+        alert("Nie udało się wczytać pliku projektu. Sprawdź czy to poprawny plik JSON.");
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  };
+
   return (
     <div className="w-80 bg-white p-4 shadow-xl h-full flex flex-col z-10 relative">
       <h2 className="text-lg font-black text-gray-800 mb-3 border-b pb-2 text-center uppercase">Vibe Hall Builder</h2>
+
+      <div className="flex gap-2 mb-3">
+        <button onClick={handleSaveProject}
+          className="flex-1 py-1.5 text-[9px] font-bold rounded border border-green-300 bg-green-50 text-green-700 hover:bg-green-100 uppercase tracking-wide">
+          💾 Zapisz projekt
+        </button>
+        <button onClick={() => fileInputRef.current?.click()}
+          className="flex-1 py-1.5 text-[9px] font-bold rounded border border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100 uppercase tracking-wide">
+          📂 Wczytaj projekt
+        </button>
+        <input ref={fileInputRef} type="file" accept=".json" onChange={handleLoadProject} className="hidden" />
+      </div>
 
       <div className="flex bg-gray-100 rounded p-1 mb-3">
         {['simple', 'complex'].map(type => (
@@ -216,6 +261,191 @@ const Controls = ({ params, setParams, onGenerate, isLoading, onPanelChange, cat
 
           <CollapsibleSection title="3. Logistyka i Doki" defaultOpen={true}>
             <DockGridSelector params={params} setParams={setParams} />
+          </CollapsibleSection>
+
+          {params.number_of_aisles > 1 && (
+          <CollapsibleSection title="Strefa Dokowa">
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold uppercase text-gray-500">Strefa dokowa aktywna</span>
+                <input type="checkbox" name="dock_zone_enabled" checked={params.dock_zone_enabled || false} onChange={handleChange} className="rounded" />
+              </div>
+
+              {params.dock_zone_enabled && (
+                <div className="flex flex-col gap-2 bg-blue-50/50 p-2 rounded border border-blue-100">
+                  <div className="flex flex-col">
+                    <span className="text-[10px] font-bold text-gray-500 uppercase mb-1">Strona strefy dokowej</span>
+                    <select name="dock_zone_side" value={params.dock_zone_side || "left"} onChange={handleChange} className="w-full p-2 border rounded text-[10px] font-bold bg-white">
+                      <option value="left">Lewa (strefa po lewej)</option>
+                      <option value="right">Prawa (strefa po prawej)</option>
+                      <option value="both">Obie strony</option>
+                    </select>
+                  </div>
+
+                  <div className="flex flex-col">
+                    <div className="flex justify-between text-[10px] font-bold text-gray-500 uppercase">
+                      <label>Szer. nawy dokowej [m]</label>
+                      <input type="number" name="dock_zone_width" min="6" max="24" step="0.5" value={params.dock_zone_width || 12} onChange={handleChange} className="w-14 text-right text-blue-600 font-bold bg-transparent border-b border-blue-200 focus:outline-none text-[10px]" />
+                    </div>
+                    <input type="range" name="dock_zone_width" min="6" max="24" step="0.5" value={params.dock_zone_width || 12} onChange={handleChange} className="w-full h-1 bg-blue-200 rounded accent-blue-600" />
+                  </div>
+
+                  <div className="flex flex-col">
+                    <div className="flex justify-between text-[10px] font-bold text-gray-500 uppercase">
+                      <label>Ile naw skrajnych w strefie</label>
+                      <span className="text-blue-600">{params.dock_zone_aisles || 1}</span>
+                    </div>
+                    <input type="range" name="dock_zone_aisles" min="1" max={Math.max(1, (params.number_of_aisles || 2) - 1)} step="1" value={params.dock_zone_aisles || 1} onChange={handleChange} className="w-full h-1 bg-blue-200 rounded accent-blue-600" />
+                  </div>
+
+                  <div className="text-[9px] text-gray-400 mt-1">
+                    Nawa dokowa: <span className="text-blue-600 font-bold">{params.dock_zone_width || 12}m</span> |
+                    Pozosta\u0142e nawy: <span className="text-blue-600 font-bold">{((params.width - (params.dock_zone_width || 12) * (params.dock_zone_aisles || 1) * (params.dock_zone_side === "both" ? 2 : 1)) / Math.max(1, params.number_of_aisles - (params.dock_zone_aisles || 1) * (params.dock_zone_side === "both" ? 2 : 1))).toFixed(1)}m</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          </CollapsibleSection>
+          )}
+
+
+          <CollapsibleSection title="Doświetlenie i Oddymianie">
+            <div className="flex flex-col gap-3">
+              {["main", ...(params.dock_zone_enabled ? ["dock_zone"] : [])].map(zoneId => {
+                const zoneConfig = (params.roof_lights || []).find(z => z.zone_id === zoneId) || { zone_id: zoneId, items: [] };
+                const zoneItems = zoneConfig.items || [];
+                const zoneName = zoneId === "main" ? "Strefa magazynowa" : "Strefa dokowa";
+
+                // Obliczenia powierzchni
+                const zoneWidth = zoneId === "dock_zone" ? (params.dock_zone_width || 12) * (params.dock_zone_side === "both" ? 2 : 1) : params.width - ((params.dock_zone_enabled && params.dock_zone_side !== "both") ? (params.dock_zone_width || 12) : (params.dock_zone_enabled ? (params.dock_zone_width || 12) * 2 : 0));
+                const zoneArea = zoneWidth * params.length;
+                let skylightArea = 0, ventArea = 0;
+                zoneItems.forEach(item => {
+                  const a = item.width * item.length * item.quantity;
+                  if (item.item_type === "skylight" || item.item_type === "light_strip") skylightArea += a;
+                  if (item.item_type === "smoke_vent") ventArea += a;
+                  if (item.item_type === "light_strip_with_vents") {
+                    const ventsInStrip = item.width * (item.vent_length || 2) * (item.vent_count || 0) * item.quantity;
+                    skylightArea += a - ventsInStrip;
+                    ventArea += ventsInStrip;
+                  }
+                });
+
+                return (
+                  <div key={zoneId} className="border border-gray-200 rounded p-2 mb-2">
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-[10px] font-black text-cyan-800 uppercase">{zoneName}</span>
+                      <button onClick={() => {
+                        const newItem = { item_id: `${zoneId}_${Date.now()}`, item_type: "skylight", width: 2.0, length: 3.0, quantity: 4, vent_count: 2, vent_length: 2.0 };
+                        const newZones = [...(params.roof_lights || [])];
+                        const idx = newZones.findIndex(z => z.zone_id === zoneId);
+                        if (idx >= 0) { newZones[idx] = { ...newZones[idx], items: [...newZones[idx].items, newItem] }; }
+                        else { newZones.push({ zone_id: zoneId, items: [newItem] }); }
+                        setParams(prev => ({ ...prev, roof_lights: newZones }));
+                      }} className="text-[8px] bg-cyan-50 text-cyan-700 px-2 py-1 rounded">+ Pozycja</button>
+                    </div>
+
+                    {zoneItems.map((item, itemIdx) => (
+                      <div key={item.item_id} className="bg-gray-50 p-1.5 rounded border border-gray-100 mb-1">
+                        <div className="flex gap-1 items-center mb-1">
+                          <select value={item.item_type} onChange={(e) => {
+                            const newType = e.target.value;
+                            const isStrip = newType === "light_strip" || newType === "light_strip_with_vents";
+                            const fullStripLen = Math.max(6, Math.round((params.length - 2) * 2) / 2);
+                            const newZones = [...(params.roof_lights || [])];
+                            const zIdx = newZones.findIndex(z => z.zone_id === zoneId);
+                            if (zIdx >= 0) {
+                              const newItems = [...newZones[zIdx].items];
+                              const cur = newItems[itemIdx];
+                              let len = cur.length;
+                              if (isStrip && len < params.length * 0.5) len = fullStripLen;
+                              if (!isStrip && len > 10) len = 3.0;
+                              newItems[itemIdx] = { ...cur, item_type: newType, length: len };
+                              newZones[zIdx] = { ...newZones[zIdx], items: newItems };
+                            }
+                            setParams(prev => ({ ...prev, roof_lights: newZones }));
+                          }} className="flex-1 p-1 border text-[8px] rounded">
+                            <option value="skylight">Świetlik</option>
+                            <option value="smoke_vent">Klapa dymowa</option>
+                            <option value="light_strip">Pasmo świetlne</option>
+                            <option value="light_strip_with_vents">Pasmo z klapami</option>
+                          </select>
+                          <button onClick={() => {
+                            const newZones = [...(params.roof_lights || [])];
+                            const zIdx = newZones.findIndex(z => z.zone_id === zoneId);
+                            if (zIdx >= 0) { const newItems = [...newZones[zIdx].items]; newItems.splice(itemIdx, 1); newZones[zIdx] = {...newZones[zIdx], items: newItems}; }
+                            setParams(prev => ({ ...prev, roof_lights: newZones }));
+                          }} className="text-[8px] text-red-500 px-1">X</button>
+                        </div>
+                        <div className="grid grid-cols-3 gap-1">
+                          <div className="flex flex-col"><span className="text-[7px] text-gray-400">Szer[m]</span>
+                            <input type="number" step="0.5" min="0.5" max="6" value={item.width} onChange={(e) => {
+                              const newZones = [...(params.roof_lights || [])]; const zIdx = newZones.findIndex(z => z.zone_id === zoneId);
+                              if (zIdx >= 0) { const ni = [...newZones[zIdx].items]; ni[itemIdx] = {...ni[itemIdx], width: parseFloat(e.target.value)||1}; newZones[zIdx]={...newZones[zIdx],items:ni}; }
+                              setParams(prev => ({...prev, roof_lights: newZones}));
+                            }} className="p-0.5 border text-[9px] text-center rounded" /></div>
+                          <div className="flex flex-col"><span className="text-[7px] text-gray-400">Dł[m]</span>
+                            <input type="number" step="0.5" min="1" max="400" value={item.length} onChange={(e) => {
+                              const newZones = [...(params.roof_lights || [])]; const zIdx = newZones.findIndex(z => z.zone_id === zoneId);
+                              if (zIdx >= 0) { const ni = [...newZones[zIdx].items]; ni[itemIdx] = {...ni[itemIdx], length: parseFloat(e.target.value)||1}; newZones[zIdx]={...newZones[zIdx],items:ni}; }
+                              setParams(prev => ({...prev, roof_lights: newZones}));
+                            }} className="p-0.5 border text-[9px] text-center rounded" /></div>
+                          <div className="flex flex-col"><span className="text-[7px] text-gray-400">Ilość</span>
+                            <input type="number" step="1" min="1" max="50" value={item.quantity} onChange={(e) => {
+                              const newZones = [...(params.roof_lights || [])]; const zIdx = newZones.findIndex(z => z.zone_id === zoneId);
+                              if (zIdx >= 0) { const ni = [...newZones[zIdx].items]; ni[itemIdx] = {...ni[itemIdx], quantity: parseInt(e.target.value)||1}; newZones[zIdx]={...newZones[zIdx],items:ni}; }
+                              setParams(prev => ({...prev, roof_lights: newZones}));
+                            }} className="p-0.5 border text-[9px] text-center rounded" /></div>
+                        </div>
+                        {item.item_type === "light_strip_with_vents" && (
+                          <div className="grid grid-cols-2 gap-1 mt-1 border-t pt-1">
+                            <div className="flex flex-col"><span className="text-[7px] text-gray-400">Klap [szt]</span>
+                              <input type="number" step="1" min="1" max="20" value={item.vent_count} onChange={(e) => {
+                                const newZones = [...(params.roof_lights || [])]; const zIdx = newZones.findIndex(z => z.zone_id === zoneId);
+                                if (zIdx >= 0) { const ni = [...newZones[zIdx].items]; ni[itemIdx] = {...ni[itemIdx], vent_count: parseInt(e.target.value)||1}; newZones[zIdx]={...newZones[zIdx],items:ni}; }
+                                setParams(prev => ({...prev, roof_lights: newZones}));
+                              }} className="p-0.5 border text-[9px] text-center rounded" /></div>
+                            <div className="flex flex-col"><span className="text-[7px] text-gray-400">Dł klapy[m]</span>
+                              <input type="number" step="0.5" min="1" max="6" value={item.vent_length} onChange={(e) => {
+                                const newZones = [...(params.roof_lights || [])]; const zIdx = newZones.findIndex(z => z.zone_id === zoneId);
+                                if (zIdx >= 0) { const ni = [...newZones[zIdx].items]; ni[itemIdx] = {...ni[itemIdx], vent_length: parseFloat(e.target.value)||1}; newZones[zIdx]={...newZones[zIdx],items:ni}; }
+                                setParams(prev => ({...prev, roof_lights: newZones}));
+                              }} className="p-0.5 border text-[9px] text-center rounded" /></div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+
+                    <div className="bg-cyan-50/50 rounded p-1.5 mt-1 text-[8px] text-gray-600">
+                      <div>Pow. świetlików: <b>{skylightArea.toFixed(1)} m²</b></div>
+                      <div>Pow. klap dymowych: <b>{ventArea.toFixed(1)} m²</b></div>
+                      <div>Łącznie: <b>{(skylightArea + ventArea).toFixed(1)} m²</b></div>
+                      <div>Udział w strefie ({zoneArea.toFixed(0)} m²): <b className="text-cyan-700">{zoneArea > 0 ? ((skylightArea + ventArea) / zoneArea * 100).toFixed(2) : 0}%</b></div>
+                    </div>
+                  </div>
+                );
+              })}
+
+              <div className="bg-gray-100 rounded p-1.5 text-[8px] text-gray-700 font-bold">
+                Uśredniony wsp. doświetlenia+oddymiania / pow. budynku: <span className="text-cyan-700">
+                  {(() => {
+                    let totalLight = 0, totalVent = 0;
+                    (params.roof_lights || []).forEach(z => (z.items || []).forEach(item => {
+                      const a = item.width * item.length * item.quantity;
+                      if (item.item_type === "skylight" || item.item_type === "light_strip") totalLight += a;
+                      if (item.item_type === "smoke_vent") totalVent += a;
+                      if (item.item_type === "light_strip_with_vents") {
+                        const vInS = item.width * (item.vent_length||2) * (item.vent_count||0) * item.quantity;
+                        totalLight += a - vInS;
+                        totalVent += vInS;
+                      }
+                    }));
+                    const buildingArea = params.width * params.length;
+                    return buildingArea > 0 ? ((totalLight + totalVent) / buildingArea * 100).toFixed(2) + "%" : "0%";
+                  })()}
+                </span>
+              </div>
+            </div>
           </CollapsibleSection>
 
           <CollapsibleSection title="ŚCIANY ZEWNĘTRZNE">
