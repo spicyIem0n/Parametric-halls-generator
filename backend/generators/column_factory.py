@@ -7,6 +7,7 @@ Zrefaktoryzowany: korzysta z GridSystem3D zamiast samodzielnych obliczeń siatki
 import math
 from models import Component3D, HallParameters
 from core.grid_system import GridSystem3D
+from core.defaults import DEFAULTS
 
 
 class ColumnFactory:
@@ -16,16 +17,25 @@ class ColumnFactory:
 
         # Dobór przekrojów (manual / default)
         manual_sections = params.manual_column_sections if params.manual_column_sections else {}
-        sec_ext_main = manual_sections.get("external_main", [0.4, 0.4]) if params.column_method == "manual" else [0.4, 0.4]
-        sec_int_main = manual_sections.get("internal_main", [0.4, 0.4]) if params.column_method == "manual" else [0.4, 0.4]
-        sec_int_clad = manual_sections.get("intermediate_cladding", [0.3, 0.3]) if params.column_method == "manual" else [0.3, 0.3]
+
+        def _get_section(category):
+            if params.column_method == "manual":
+                return manual_sections.get(category, DEFAULTS.column_sections.get(category, [0.4, 0.4]))
+            return DEFAULTS.column_sections.get(category, [0.4, 0.4])
 
         # 1. SŁUPY RAM GŁÓWNYCH
         for frame_idx in range(grid.num_frames):
             for axis_idx in range(len(grid.axes_x)):
                 node = grid.get_node(frame_idx, axis_idx)
 
-                section = sec_ext_main if node.is_external else sec_int_main
+                # Rozpoznanie kategorii: narożnik vs główny zewnętrzny vs wewnętrzny
+                is_corner = node.is_external and (frame_idx == 0 or frame_idx == grid.num_frames - 1)
+                if is_corner:
+                    section = _get_section("external_corner")
+                elif node.is_external:
+                    section = _get_section("external_main")
+                else:
+                    section = _get_section("internal_main")
 
                 column_top_y = node.y_roof
                 column_base_y = node.y_foundation
@@ -50,7 +60,7 @@ class ColumnFactory:
                     type="column_gable",
                     position=[x_pos, column_base_y + (column_height / 2), z_pos],
                     rotation=[0, 0, 0],
-                    scale=[sec_int_clad[0], column_height, sec_int_clad[1]]
+                    scale=[_get_section("external_intermediate_cladding")[0], column_height, _get_section("external_intermediate_cladding")[1]]
                 ))
 
         # 3. SŁUPY POŚREDNIE WZDŁUŻNE
@@ -70,7 +80,7 @@ class ColumnFactory:
                         type="column_gable",
                         position=[x_pos, column_base_y + (column_height / 2), z_mid],
                         rotation=[0, 0, 0],
-                        scale=[sec_int_clad[0], column_height, sec_int_clad[1]]
+                        scale=[_get_section("external_intermediate_cladding")[0], column_height, _get_section("external_intermediate_cladding")[1]]
                     ))
 
         return columns

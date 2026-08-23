@@ -20,9 +20,9 @@ const App = () => {
     floor_thickness: 0.2, floor_base_type: 'lean_concrete', floor_base_thickness: 0.15,
    foundation_method: 'default', foundation_depth: 1.0, 
     docks_config: {}, dock_foundation_depth: 1.2,
-    manual_sizes: { external_main: [2.5, 4.0, 0.45], internal_main: [2.5, 2.5, 0.45], intermediate_cladding: [1.5, 1.5, 0.40], external_dock: [2.7, 3.5, 0.45], internal_dock: [2.5, 3.7, 0.45] },
+    manual_sizes: { external_main: [2.5, 4.0, 0.45], external_corner: [2.5, 4.0, 0.45], external_intermediate_cladding: [1.5, 1.5, 0.40], internal_main: [2.5, 2.5, 0.45] },
     column_method: 'default',
-    manual_column_sections: { external_main: [0.4, 0.4], internal_main: [0.4, 0.4], intermediate_cladding: [0.3, 0.3], external_dock: [0.5, 0.5], internal_dock: [0.5, 0.5] },
+    manual_column_sections: { external_main: [0.4, 0.4], external_corner: [0.4, 0.4], external_intermediate_cladding: [0.3, 0.3], internal_main: [0.4, 0.4] },
     has_cladding: true, cladding_orientation: 'horizontal', cladding_panel_id: 'SP2B_E_PIR_100', cladding_thickness: 0.1, cladding_bottom_level: 0.25,
     plinth_thickness: 0.24, plinth_top_level: 0.30, purlin_spacing: 2.0, roof_panel_thickness: 0.15, truss_depth: 0.8,
     // NOWE: Parametry odwodnienia

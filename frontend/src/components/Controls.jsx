@@ -22,63 +22,92 @@ const CollapsibleSection = ({ title, children, defaultOpen = false }) => {
 // --- KOMPONENT MAPY DOKÓW ---
 const DockGridSelector = ({ params, setParams }) => {
   const numBays = Math.max(1, Math.round(params.length / params.bay_spacing));
-  // Obliczamy ile pól (slotów) o szerokości ok 4m zmieści się w jednym przęśle
   const slotsPerBay = Math.max(1, Math.floor(params.bay_spacing / 4.0));
-  
-  const toggleDock = (side, bayIndex, slotIndex) => {
-    const key = `${side}-${bayIndex}-${slotIndex}`;
-    const current = params.docks_config[key] || 'none';
-    let next = current === 'none' ? 'dock' : current === 'dock' ? 'gate' : 'none';
+  const [openingType, setOpeningType] = React.useState("dock");
+  const [lastClicked, setLastClicked] = React.useState(null);
 
-    const newConfig = { ...params.docks_config };
-    if (next === 'none') delete newConfig[key];
-    else newConfig[key] = next;
-    
-    setParams({ ...params, docks_config: newConfig });
+  const flatToKey = (side, flat) => `${side}-${Math.floor(flat / slotsPerBay)}-${flat % slotsPerBay}`;
+
+  const applyToSlot = (side, flatIndex) => {
+    const key = flatToKey(side, flatIndex);
+    setParams(prev => {
+      const newConfig = { ...prev.docks_config };
+      if (openingType === "none") delete newConfig[key];
+      else newConfig[key] = openingType;
+      return { ...prev, docks_config: newConfig };
+    });
+  };
+
+  const applyRange = (side, from, to) => {
+    const min = Math.min(from, to), max = Math.max(from, to);
+    setParams(prev => {
+      const newConfig = { ...prev.docks_config };
+      for (let f = min; f <= max; f++) {
+        const key = flatToKey(side, f);
+        if (openingType === "none") delete newConfig[key];
+        else newConfig[key] = openingType;
+      }
+      return { ...prev, docks_config: newConfig };
+    });
+  };
+
+  const handleClick = (side, flatIndex, e) => {
+    if (e.shiftKey && lastClicked && lastClicked.side === side) {
+      applyRange(side, lastClicked.flatIndex, flatIndex);
+    } else {
+      applyToSlot(side, flatIndex);
+    }
+    setLastClicked({ side, flatIndex });
   };
 
   const fillSide = (side) => {
     const newConfig = { ...params.docks_config };
-    for (let i = 0; i < numBays; i++) {
-      for (let k = 0; k < slotsPerBay; k++) newConfig[`${side}-${i}-${k}`] = 'dock';
-    }
-    setParams({ ...params, docks_config: newConfig });
+    const fillType = openingType === "none" ? "dock" : openingType;
+    for (let i = 0; i < numBays; i++)
+      for (let k = 0; k < slotsPerBay; k++) newConfig[`${side}-${i}-${k}`] = fillType;
+    setParams(prev => ({ ...prev, docks_config: newConfig }));
   };
-
   const clearSide = (side) => {
     const newConfig = { ...params.docks_config };
-    for (let i = 0; i < numBays; i++) {
+    for (let i = 0; i < numBays; i++)
       for (let k = 0; k < slotsPerBay; k++) delete newConfig[`${side}-${i}-${k}`];
-    }
-    setParams({ ...params, docks_config: newConfig });
+    setParams(prev => ({ ...prev, docks_config: newConfig }));
   };
 
   return (
     <div className="bg-white rounded border border-gray-200 p-2 shadow-sm">
+      <div className="mb-2">
+        <span className="text-[9px] font-bold text-gray-500 uppercase block mb-1">Rodzaj otworu (klik / Shift+klik = zakres)</span>
+        <select value={openingType} onChange={(e) => setOpeningType(e.target.value)} className="w-full p-1.5 border rounded text-[10px] font-bold bg-gray-50">
+          <option value="dock">Dok przeładunkowy</option>
+          <option value="gate">Brama kurierska</option>
+          <option value="none">Ściana pełna (usuń)</option>
+        </select>
+      </div>
       <div className="flex justify-between mb-2">
         <div className="flex gap-1 flex-col">
-           <button onClick={() => fillSide('left')} className="text-[8px] bg-blue-50 text-blue-600 px-1 py-1 rounded">Max Doki L</button>
-           <button onClick={() => clearSide('left')} className="text-[8px] bg-red-50 text-red-600 px-1 py-1 rounded">Czyść L</button>
+          <button onClick={() => fillSide("left")} className="text-[8px] bg-blue-50 text-blue-600 px-1 py-1 rounded">Wypełnij L</button>
+          <button onClick={() => clearSide("left")} className="text-[8px] bg-red-50 text-red-600 px-1 py-1 rounded">Czyść L</button>
         </div>
         <div className="flex gap-1 flex-col">
-           <button onClick={() => fillSide('right')} className="text-[8px] bg-blue-50 text-blue-600 px-1 py-1 rounded">Max Doki R</button>
-           <button onClick={() => clearSide('right')} className="text-[8px] bg-red-50 text-red-600 px-1 py-1 rounded">Czyść R</button>
+          <button onClick={() => fillSide("right")} className="text-[8px] bg-blue-50 text-blue-600 px-1 py-1 rounded">Wypełnij R</button>
+          <button onClick={() => clearSide("right")} className="text-[8px] bg-red-50 text-red-600 px-1 py-1 rounded">Czyść R</button>
         </div>
       </div>
-      
       <div className="flex justify-between gap-2">
-        {['left', 'right'].map((side) => (
+        {["left", "right"].map((side) => (
           <div key={side} className="flex-1 flex flex-col gap-1">
-            <span className="text-[9px] font-bold text-center text-gray-400 uppercase">{side === 'left' ? 'LEWA' : 'PRAWA'}</span>
+            <span className="text-[9px] font-bold text-center text-gray-400 uppercase">{side === "left" ? "LEWA" : "PRAWA"}</span>
             {[...Array(numBays)].map((_, i) => (
               <div key={`${side}-bay-${i}`} className="flex gap-1 border border-dashed border-gray-300 p-1 rounded bg-gray-50">
                 {[...Array(slotsPerBay)].map((_, k) => {
+                  const flat = i * slotsPerBay + k;
                   const val = params.docks_config[`${side}-${i}-${k}`];
                   return (
-                    <button key={`${side}-${i}-${k}`} onClick={() => toggleDock(side, i, k)}
-                      className={`flex-1 h-6 rounded text-[7px] border font-bold flex items-center justify-center
-                        ${val === 'dock' ? 'bg-blue-500 text-white' : val === 'gate' ? 'bg-orange-500 text-white' : 'bg-white text-gray-400'}`}>
-                      {val === 'dock' ? 'DOK' : val === 'gate' ? 'BRM' : '-'}
+                    <button key={flat} onClick={(e) => handleClick(side, flat, e)}
+                      className={`flex-1 h-6 rounded text-[7px] border font-bold flex items-center justify-center select-none
+                        ${val === "dock" ? "bg-blue-500 text-white" : val === "gate" ? "bg-orange-500 text-white" : "bg-white text-gray-400"}`}>
+                      {val === "dock" ? "DOK" : val === "gate" ? "BRM" : "-"}
                     </button>
                   );
                 })}
@@ -95,7 +124,15 @@ const DockGridSelector = ({ params, setParams }) => {
 const Controls = ({ params, setParams, onGenerate, isLoading, onPanelChange, catalog, validation }) => {
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
-    setParams(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : parseFloat(value) }));
+    const STRING_FIELDS = new Set(["roof_drainage_type", "column_method", "foundation_method", "floor_base_type", "cladding_orientation", "cladding_panel_id", "hall_type"]);
+    const INTEGER_FIELDS = new Set(["number_of_aisles", "drainage_zones_x", "drainage_zones_z"]);
+    setParams(prev => {
+      if (type === "checkbox") return { ...prev, [name]: checked };
+      if (STRING_FIELDS.has(name) || type === "select-one") return { ...prev, [name]: value };
+      const parsed = parseFloat(value);
+      if (!Number.isFinite(parsed)) return prev;
+      return { ...prev, [name]: INTEGER_FIELDS.has(name) ? Math.round(parsed) : parsed };
+    });
   };
 
   return (
@@ -117,15 +154,15 @@ const Controls = ({ params, setParams, onGenerate, isLoading, onPanelChange, cat
           <CollapsibleSection title="1. Geometria Główna" defaultOpen={true}>
             <div className="flex flex-col gap-3">
               {[
-                { name: 'width', label: 'Szerokość [m]', min: 10, max: 60, step: "1" },
-                { name: 'length', label: 'Długość [m]', min: 10, max: 120, step: "1" },
+                { name: 'width', label: 'Szerokość [m]', min: 10, max: 180, step: "1" },
+                { name: 'length', label: 'Długość [m]', min: 10, max: 360, step: "1" },
                 { name: 'clear_height', label: 'Wys. w świetle [m]', min: 4, max: 18, step: "0.5" },
-                { name: 'number_of_aisles', label: 'Ilość naw [szt]', min: 1, max: 4, step: "1" },
+                { name: 'number_of_aisles', label: 'Ilość naw [szt]', min: 1, max: 12, step: "1" },
                 { name: 'bay_spacing', label: 'Rozstaw ram [m]', min: 4, max: 12, step: "0.5" }
               ].map(f => (
                 <div key={f.name} className="flex flex-col">
                   <div className="flex justify-between text-[10px] font-bold text-gray-500 uppercase">
-                    <label>{f.label}</label> <span className="text-blue-600">{params[f.name]}</span>
+                    <input type="number" name={f.name} min={f.min} max={f.max} step={f.step} value={params[f.name]} onChange={handleChange} className="w-14 text-right text-blue-600 font-bold bg-transparent border-b border-blue-200 focus:outline-none text-[10px]" />
                   </div>
                   <input type="range" {...f} value={params[f.name]} onChange={handleChange} className="w-full h-1 bg-gray-200 rounded accent-blue-600" />
                 </div>
@@ -158,7 +195,7 @@ const Controls = ({ params, setParams, onGenerate, isLoading, onPanelChange, cat
             <DockGridSelector params={params} setParams={setParams} />
           </CollapsibleSection>
 
-          <CollapsibleSection title="4. Obudowa Ruukki">
+          <CollapsibleSection title="ŚCIANY ZEWNĘTRZNE">
             <div className="flex items-center justify-between mb-2">
               <span className="text-[10px] font-bold uppercase text-gray-500">Płyty ścienne</span>
               <input type="checkbox" name="has_cladding" checked={params.has_cladding} onChange={handleChange} className="rounded" />
@@ -170,8 +207,17 @@ const Controls = ({ params, setParams, onGenerate, isLoading, onPanelChange, cat
                 ))}
               </select>
             )}
+            {params.has_cladding && (
+              <div className="mt-2">
+                <span className="text-[10px] font-bold uppercase text-gray-500 block mb-1">Układ płyt</span>
+                <select name="cladding_orientation" value={params.cladding_orientation} onChange={handleChange} className="w-full p-2 border rounded text-[10px] font-bold bg-gray-50">
+                  <option value="horizontal">Poziomy (standardowy)</option>
+                  <option value="vertical">Pionowy (z ryglami montażowymi)</option>
+                </select>
+              </div>
+            )}
           </CollapsibleSection>
-<CollapsibleSection title="5. Konstrukcja i Fundamenty">
+<CollapsibleSection title="KONSTRUKCJA">
             <div className="flex flex-col gap-4">
               
               {/* --- SŁUPY --- */}
@@ -184,15 +230,23 @@ const Controls = ({ params, setParams, onGenerate, isLoading, onPanelChange, cat
                 
                 {params.column_method === 'manual' && (
                   <div className="mt-2 bg-gray-50 p-2 rounded flex flex-col gap-2 border border-gray-200">
-                    {Object.keys(params.manual_column_sections).map(type => (
-                      <div key={type} className="flex flex-col gap-1">
-                        <label className="text-[8px] font-bold text-gray-500 uppercase">{type.replace('_', ' ')}</label>
+                    {[
+                      { key: 'external_main', label: 'Słupy główne zewnętrzne' },
+                      { key: 'external_corner', label: 'Słupy zewnętrzne narożne' },
+                      { key: 'external_intermediate_cladding', label: 'Słupy pośrednie pod obudowę' },
+                      { key: 'internal_main', label: 'Słupy wewnętrzne' },
+                    ].map(cat => (
+                      <div key={cat.key} className="flex flex-col gap-1">
+                        <label className="text-[8px] font-bold text-gray-500 uppercase">{cat.label}</label>
                         <div className="flex gap-1">
-                          {params.manual_column_sections[type].map((v, i) => (
+                          {(params.manual_column_sections[cat.key] || [0.4, 0.4]).map((v, i) => (
                             <input key={i} type="number" step="0.05" value={v} onChange={(e) => {
-                              const newParams = { ...params };
-                              newParams.manual_column_sections[type][i] = parseFloat(e.target.value);
-                              setParams(newParams);
+                              setParams(prev => {
+                                const newSections = { ...prev.manual_column_sections };
+                                newSections[cat.key] = [...(newSections[cat.key] || [0.4, 0.4])];
+                                newSections[cat.key][i] = parseFloat(e.target.value) || 0;
+                                return { ...prev, manual_column_sections: newSections };
+                              });
                             }} className="w-full p-1 border text-[10px] text-center rounded font-mono" />
                           ))}
                         </div>
@@ -212,15 +266,23 @@ const Controls = ({ params, setParams, onGenerate, isLoading, onPanelChange, cat
                 
                 {params.foundation_method === 'manual' && (
                   <div className="mt-2 bg-blue-50/50 p-2 rounded flex flex-col gap-2 border border-blue-100">
-                    {Object.keys(params.manual_sizes).map(type => (
-                      <div key={type} className="flex flex-col gap-1">
-                        <label className="text-[8px] font-bold text-gray-500 uppercase">{type.replace('_', ' ')}</label>
+                    {[
+                      { key: 'external_main', label: 'Stopy pod słupy główne zewn.' },
+                      { key: 'external_corner', label: 'Stopy pod słupy narożne' },
+                      { key: 'external_intermediate_cladding', label: 'Stopy pod słupy pośrednie' },
+                      { key: 'internal_main', label: 'Stopy pod słupy wewnętrzne' },
+                    ].map(cat => (
+                      <div key={cat.key} className="flex flex-col gap-1">
+                        <label className="text-[8px] font-bold text-gray-500 uppercase">{cat.label}</label>
                         <div className="flex gap-1">
-                          {params.manual_sizes[type].map((v, i) => (
+                          {(params.manual_sizes[cat.key] || [2.0, 2.0, 0.5]).map((v, i) => (
                             <input key={i} type="number" step="0.1" value={v} onChange={(e) => {
-                              const newParams = { ...params };
-                              newParams.manual_sizes[type][i] = parseFloat(e.target.value);
-                              setParams(newParams);
+                              setParams(prev => {
+                                const newSizes = { ...prev.manual_sizes };
+                                newSizes[cat.key] = [...(newSizes[cat.key] || [2.0, 2.0, 0.5])];
+                                newSizes[cat.key][i] = parseFloat(e.target.value) || 0;
+                                return { ...prev, manual_sizes: newSizes };
+                              });
                             }} className="w-full p-1 border text-[10px] text-center rounded font-mono" />
                           ))}
                         </div>
@@ -633,8 +695,8 @@ const Controls = ({ params, setParams, onGenerate, isLoading, onPanelChange, cat
                   </div>
                   
                   {[
-                    {key: 'width', label: 'Szer. [m]', min: 10, max: 60, step: 1},
-                    {key: 'length', label: 'Dł. [m]', min: 10, max: 120, step: 1},
+                    {key: 'width', label: 'Szer. [m]', min: 10, max: 180, step: 1},
+                    {key: 'length', label: 'Dł. [m]', min: 10, max: 360, step: 1},
                     {key: 'clear_height', label: 'Wys. [m]', min: 4, max: 18, step: 0.5},
                     {key: 'bay_spacing', label: 'Rozstaw [m]', min: 4, max: 12, step: 0.5},
                   ].map(f => (

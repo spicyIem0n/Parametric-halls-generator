@@ -163,8 +163,8 @@ class RoofFactory:
             panel_x = ext_roof_half_width / 2
             roof_y = params.clear_height + params.truss_depth + (ext_roof_half_width / 2) * math.tan(angle_rad) + (params.roof_panel_thickness / 2)
 
-            elements.append(Component3D(type="roof_panel", position=[-panel_x, roof_y, 0], rotation=[0, 0, -angle_rad], scale=[chord_len_ext, params.roof_panel_thickness, grid.length]))
-            elements.append(Component3D(type="roof_panel", position=[panel_x, roof_y, 0], rotation=[0, 0, angle_rad], scale=[chord_len_ext, params.roof_panel_thickness, grid.length]))
+            elements.append(Component3D(type="roof_panel", position=[-panel_x, roof_y, 0], rotation=[0, 0, angle_rad], scale=[chord_len_ext, params.roof_panel_thickness, grid.length]))
+            elements.append(Component3D(type="roof_panel", position=[panel_x, roof_y, 0], rotation=[0, 0, -angle_rad], scale=[chord_len_ext, params.roof_panel_thickness, grid.length]))
 
         elif params.roof_drainage_type == "vacuum":
             top_y = params.clear_height + params.truss_depth

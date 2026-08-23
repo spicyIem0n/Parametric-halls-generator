@@ -29,19 +29,17 @@ class ProjectDefaults:
     # --- Domyślne gabaryty fundamentów [A, B, H] ---
     foundation_sizes: Dict[str, List[float]] = field(default_factory=lambda: {
         "external_main": [2.0, 2.0, 0.5],
+        "external_corner": [2.0, 2.0, 0.5],
+        "external_intermediate_cladding": [1.2, 1.2, 0.5],
         "internal_main": [1.5, 1.5, 0.5],
-        "intermediate_cladding": [1.2, 1.2, 0.5],
-        "external_dock": [2.5, 3.5, 0.6],
-        "internal_dock": [2.0, 2.5, 0.6],
     })
 
     # --- Domyślne przekroje słupów [bx, bz] ---
     column_sections: Dict[str, List[float]] = field(default_factory=lambda: {
         "external_main": [0.4, 0.4],
+        "external_corner": [0.4, 0.4],
+        "external_intermediate_cladding": [0.3, 0.3],
         "internal_main": [0.4, 0.4],
-        "intermediate_cladding": [0.3, 0.3],
-        "external_dock": [0.5, 0.5],
-        "internal_dock": [0.5, 0.5],
     })
 
     # --- Parametry dachu (kratownica) ---

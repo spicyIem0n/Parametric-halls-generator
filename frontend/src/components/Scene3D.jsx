@@ -12,6 +12,7 @@ const getCategory = (type) => {
   if (type.includes('mezzanine')) return 'structure';
   if (type.includes('reserve')) return 'roof';
   if (type.includes('dock') || type.includes('gate')) return 'cladding';
+  if (type.includes('cladding_rail')) return 'structure';
   if (type.includes('sandwich_panel')) return 'cladding';
   if (type.includes('roof')) return 'roof';
   if (type.includes('floor') || type.includes('foundation') || type.includes('plinth')) return 'foundation';

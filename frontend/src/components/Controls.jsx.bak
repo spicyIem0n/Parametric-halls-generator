@@ -1,0 +1,721 @@
+﻿import React, { useState } from 'react';
+
+// --- KOMPONENT ZWIJANEJ SEKCJI ---
+const CollapsibleSection = ({ title, children, defaultOpen = false }) => {
+  const [isOpen, setIsOpen] = useState(defaultOpen);
+  return (
+    <div className="border-b border-gray-100 last:border-0">
+      <button 
+        onClick={() => setIsOpen(!isOpen)} 
+        className="w-full flex justify-between items-center py-3 px-1 text-left focus:outline-none hover:bg-gray-50 transition-colors"
+      >
+        <h3 className="text-[11px] font-black text-blue-900 uppercase tracking-wider">{title}</h3>
+        <span className={`text-blue-500 transform transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}>
+          â–¼
+        </span>
+      </button>
+      {isOpen && <div className="pb-4 pt-1 px-1 animate-fadeIn">{children}</div>}
+    </div>
+  );
+};
+
+// --- KOMPONENT MAPY DOKÃ“W ---
+const DockGridSelector = ({ params, setParams }) => {
+  const numBays = Math.max(1, Math.round(params.length / params.bay_spacing));
+  // Obliczamy ile pÃ³l (slotÃ³w) o szerokoÅ›ci ok 4m zmieÅ›ci siÄ™ w jednym przÄ™Å›le
+  const slotsPerBay = Math.max(1, Math.floor(params.bay_spacing / 4.0));
+  
+  const toggleDock = (side, bayIndex, slotIndex) => {
+    const key = `${side}-${bayIndex}-${slotIndex}`;
+    const current = params.docks_config[key] || 'none';
+    let next = current === 'none' ? 'dock' : current === 'dock' ? 'gate' : 'none';
+
+    const newConfig = { ...params.docks_config };
+    if (next === 'none') delete newConfig[key];
+    else newConfig[key] = next;
+    
+    setParams({ ...params, docks_config: newConfig });
+  };
+
+  const fillSide = (side) => {
+    const newConfig = { ...params.docks_config };
+    for (let i = 0; i < numBays; i++) {
+      for (let k = 0; k < slotsPerBay; k++) newConfig[`${side}-${i}-${k}`] = 'dock';
+    }
+    setParams({ ...params, docks_config: newConfig });
+  };
+
+  const clearSide = (side) => {
+    const newConfig = { ...params.docks_config };
+    for (let i = 0; i < numBays; i++) {
+      for (let k = 0; k < slotsPerBay; k++) delete newConfig[`${side}-${i}-${k}`];
+    }
+    setParams({ ...params, docks_config: newConfig });
+  };
+
+  return (
+    <div className="bg-white rounded border border-gray-200 p-2 shadow-sm">
+      <div className="flex justify-between mb-2">
+        <div className="flex gap-1 flex-col">
+           <button onClick={() => fillSide('left')} className="text-[8px] bg-blue-50 text-blue-600 px-1 py-1 rounded">Max Doki L</button>
+           <button onClick={() => clearSide('left')} className="text-[8px] bg-red-50 text-red-600 px-1 py-1 rounded">CzyÅ›Ä‡ L</button>
+        </div>
+        <div className="flex gap-1 flex-col">
+           <button onClick={() => fillSide('right')} className="text-[8px] bg-blue-50 text-blue-600 px-1 py-1 rounded">Max Doki R</button>
+           <button onClick={() => clearSide('right')} className="text-[8px] bg-red-50 text-red-600 px-1 py-1 rounded">CzyÅ›Ä‡ R</button>
+        </div>
+      </div>
+      
+      <div className="flex justify-between gap-2">
+        {['left', 'right'].map((side) => (
+          <div key={side} className="flex-1 flex flex-col gap-1">
+            <span className="text-[9px] font-bold text-center text-gray-400 uppercase">{side === 'left' ? 'LEWA' : 'PRAWA'}</span>
+            {[...Array(numBays)].map((_, i) => (
+              <div key={`${side}-bay-${i}`} className="flex gap-1 border border-dashed border-gray-300 p-1 rounded bg-gray-50">
+                {[...Array(slotsPerBay)].map((_, k) => {
+                  const val = params.docks_config[`${side}-${i}-${k}`];
+                  return (
+                    <button key={`${side}-${i}-${k}`} onClick={() => toggleDock(side, i, k)}
+                      className={`flex-1 h-6 rounded text-[7px] border font-bold flex items-center justify-center
+                        ${val === 'dock' ? 'bg-blue-500 text-white' : val === 'gate' ? 'bg-orange-500 text-white' : 'bg-white text-gray-400'}`}>
+                      {val === 'dock' ? 'DOK' : val === 'gate' ? 'BRM' : '-'}
+                    </button>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+
+const Controls = ({ params, setParams, onGenerate, isLoading, onPanelChange, catalog, validation }) => {
+  const handleChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setParams(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : parseFloat(value) }));
+  };
+
+  return (
+    <div className="w-80 bg-white p-4 shadow-xl h-full flex flex-col z-10 relative">
+      <h2 className="text-lg font-black text-gray-800 mb-3 border-b pb-2 text-center uppercase">Vibe Hall Builder</h2>
+
+      <div className="flex bg-gray-100 rounded p-1 mb-3">
+        {['simple', 'complex'].map(type => (
+          <button key={type} onClick={() => setParams(prev => ({...prev, hall_type: type}))}
+            className={`flex-1 py-1 text-xs font-bold rounded uppercase ${params.hall_type === type ? 'bg-white shadow text-blue-600' : 'text-gray-400'}`}>
+            {type}
+          </button>
+        ))}
+      </div>
+
+      {params.hall_type === 'simple' && (
+        <div className="flex-1 overflow-y-auto pr-1 custom-scrollbar">
+          
+          <CollapsibleSection title="1. Geometria GÅ‚Ã³wna" defaultOpen={true}>
+            <div className="flex flex-col gap-3">
+              {[
+                { name: 'width', label: 'SzerokoÅ›Ä‡ [m]', min: 10, max: 60, step: "1" },
+                { name: 'length', label: 'DÅ‚ugoÅ›Ä‡ [m]', min: 10, max: 120, step: "1" },
+                { name: 'clear_height', label: 'Wys. w Å›wietle [m]', min: 4, max: 18, step: "0.5" },
+                { name: 'number_of_aisles', label: 'IloÅ›Ä‡ naw [szt]', min: 1, max: 4, step: "1" },
+                { name: 'bay_spacing', label: 'Rozstaw ram [m]', min: 4, max: 12, step: "0.5" }
+              ].map(f => (
+                <div key={f.name} className="flex flex-col">
+                  <div className="flex justify-between text-[10px] font-bold text-gray-500 uppercase">
+                    <label>{f.label}</label> <span className="text-blue-600">{params[f.name]}</span>
+                  </div>
+                  <input type="range" {...f} value={params[f.name]} onChange={handleChange} className="w-full h-1 bg-gray-200 rounded accent-blue-600" />
+                </div>
+              ))}
+            </div>
+          </CollapsibleSection>
+
+          <CollapsibleSection title="2. Geometria Dachu">
+            <div className="flex flex-col gap-3">
+              <select name="roof_drainage_type" value={params.roof_drainage_type} onChange={handleChange} className="w-full p-2 border rounded bg-gray-50 text-[10px] font-bold">
+                <option value="gravity">Grawitacyjne (Dwuspadowy)</option>
+                <option value="vacuum">PodciÅ›nieniowe (Koperty)</option>
+              </select>
+              
+              {params.roof_drainage_type === 'gravity' && (
+                <div className="flex flex-col">
+                  <div className="flex justify-between text-[10px] font-bold text-gray-500 uppercase"><label>KÄ…t dachu [Â°]</label> <span className="text-blue-600">{params.roof_angle}</span></div>
+                  <input type="range" name="roof_angle" min="2" max="35" step="1" value={params.roof_angle} onChange={handleChange} className="w-full h-1 bg-gray-200 rounded" />
+                </div>
+              )}
+              
+              <div className="flex flex-col border-t pt-2 mt-2">
+                <div className="flex justify-between text-[10px] font-bold text-gray-500 uppercase"><label>Max. rozstaw pÅ‚atwi [m]</label> <span className="text-blue-600">{params.purlin_spacing}</span></div>
+                <input type="range" name="purlin_spacing" min="1" max="4" step="0.5" value={params.purlin_spacing} onChange={handleChange} className="w-full h-1 bg-gray-200 rounded" />
+              </div>
+            </div>
+          </CollapsibleSection>
+
+          <CollapsibleSection title="3. Logistyka i Doki" defaultOpen={true}>
+            <DockGridSelector params={params} setParams={setParams} />
+          </CollapsibleSection>
+
+          <CollapsibleSection title="4. Obudowa Ruukki">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[10px] font-bold uppercase text-gray-500">PÅ‚yty Å›cienne</span>
+              <input type="checkbox" name="has_cladding" checked={params.has_cladding} onChange={handleChange} className="rounded" />
+            </div>
+            {params.has_cladding && (
+              <select value={params.cladding_panel_id} onChange={(e) => onPanelChange(e.target.value)} className="w-full p-2 border rounded text-[10px] font-bold text-blue-900 bg-blue-50">
+                {Object.entries(catalog).map(([id, panel]) => (
+                  <option key={id} value={id}>{panel.name} ({panel.thickness}mm)</option>
+                ))}
+              </select>
+            )}
+          </CollapsibleSection>
+<CollapsibleSection title="5. Konstrukcja i Fundamenty">
+            <div className="flex flex-col gap-4">
+              
+              {/* --- SÅUPY --- */}
+              <div>
+                <span className="text-[10px] font-bold text-gray-500 uppercase mb-1 block">Metoda doboru sÅ‚upÃ³w</span>
+                <select name="column_method" value={params.column_method} onChange={handleChange} className="w-full p-2 border rounded text-[10px] font-bold bg-gray-50">
+                  <option value="default">DomyÅ›lne przekroje</option>
+                  <option value="manual">RÄ™czne przekroje [X, Z]</option>
+                </select>
+                
+                {params.column_method === 'manual' && (
+                  <div className="mt-2 bg-gray-50 p-2 rounded flex flex-col gap-2 border border-gray-200">
+                    {Object.keys(params.manual_column_sections).map(type => (
+                      <div key={type} className="flex flex-col gap-1">
+                        <label className="text-[8px] font-bold text-gray-500 uppercase">{type.replace('_', ' ')}</label>
+                        <div className="flex gap-1">
+                          {params.manual_column_sections[type].map((v, i) => (
+                            <input key={i} type="number" step="0.05" value={v} onChange={(e) => {
+                              const newParams = { ...params };
+                              newParams.manual_column_sections[type][i] = parseFloat(e.target.value);
+                              setParams(newParams);
+                            }} className="w-full p-1 border text-[10px] text-center rounded font-mono" />
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* --- FUNDAMENTY --- */}
+              <div className="border-t border-gray-100 pt-3">
+                <span className="text-[10px] font-bold text-gray-500 uppercase mb-1 block">Metoda doboru fundamentÃ³w</span>
+                <select name="foundation_method" value={params.foundation_method} onChange={handleChange} className="w-full p-2 border rounded text-[10px] font-bold bg-gray-50">
+                  <option value="default">Gabaryty domyÅ›lne</option>
+                  <option value="manual">Gabaryty rÄ™czne [A, B, H]</option>
+                </select>
+                
+                {params.foundation_method === 'manual' && (
+                  <div className="mt-2 bg-blue-50/50 p-2 rounded flex flex-col gap-2 border border-blue-100">
+                    {Object.keys(params.manual_sizes).map(type => (
+                      <div key={type} className="flex flex-col gap-1">
+                        <label className="text-[8px] font-bold text-gray-500 uppercase">{type.replace('_', ' ')}</label>
+                        <div className="flex gap-1">
+                          {params.manual_sizes[type].map((v, i) => (
+                            <input key={i} type="number" step="0.1" value={v} onChange={(e) => {
+                              const newParams = { ...params };
+                              newParams.manual_sizes[type][i] = parseFloat(e.target.value);
+                              setParams(newParams);
+                            }} className="w-full p-1 border text-[10px] text-center rounded font-mono" />
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                
+                <div className="flex flex-col gap-2 mt-4">
+                  <div className="flex justify-between text-[10px] font-bold text-gray-500 uppercase">
+                    <label>ZagÅ‚Ä™bienie gÅ‚Ã³wne [m]</label> <span className="text-blue-600">{params.foundation_depth}</span>
+                  </div>
+                  <input type="range" name="foundation_depth" min="0.5" max="2.0" step="0.1" value={params.foundation_depth} onChange={handleChange} className="w-full h-1 bg-gray-200 rounded accent-blue-600" />
+                  
+                  <div className="flex justify-between text-[10px] font-bold text-orange-600 uppercase mt-2">
+                    <label>ZagÅ‚Ä™bienie dokowe [m]</label> <span className="text-orange-600">{params.dock_foundation_depth}</span>
+                  </div>
+                  <input type="range" name="dock_foundation_depth" min="0.8" max="2.5" step="0.1" value={params.dock_foundation_depth} onChange={handleChange} className="w-full h-1 bg-orange-200 rounded accent-orange-600" />
+                </div>
+              </div>
+              
+            </div>
+          </CollapsibleSection>
+
+          <CollapsibleSection title="6. BezpieczeÅ„stwo PoÅ¼arowe">
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-col">
+                <div className="flex justify-between text-[10px] font-bold text-gray-500 uppercase">
+                  <label>ObciÄ…Å¼enie ogniowe Qd [MJ/mÂ²]</label>
+                  <span className="text-red-600">{params.fire_load_qd}</span>
+                </div>
+                <input type="range" name="fire_load_qd" min="100" max="5000" step="100" value={params.fire_load_qd} onChange={handleChange} className="w-full h-1 bg-red-200 rounded accent-red-600" />
+              </div>
+
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold uppercase text-gray-500">Instalacja tryskaczowa</span>
+                <input type="checkbox" name="has_sprinklers" checked={params.has_sprinklers} onChange={handleChange} className="rounded" />
+              </div>
+
+              <div className="bg-red-50 border border-red-200 rounded p-2 mt-1">
+                <span className="text-[9px] font-bold text-red-800 uppercase block mb-1">Klasyfikacja automatyczna</span>
+                <span className="text-[10px] text-red-700">
+                  {params.fire_load_qd <= 500 ? 'Klasa E â€” brak wymogÃ³w' :
+                   params.fire_load_qd <= 1000 ? 'Klasa D â€” R30 (konstrukcja gÅ‚Ã³wna)' :
+                   params.fire_load_qd <= 2000 ? 'Klasa C â€” R60 / EI60' :
+                   params.fire_load_qd <= 4000 ? 'Klasa B â€” R120 / EI120' :
+                   'Klasa A â€” R240 / EI240'}
+                </span>
+              </div>
+
+              <div className="border-t border-red-200 pt-2 mt-2">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-[9px] font-bold text-red-800 uppercase">Åšciany oddzielenia (ÅšOP)</span>
+                  <button onClick={() => {
+                    const numBays = Math.max(1, Math.round(params.length / params.bay_spacing));
+                    const midAxis = Math.min(Math.floor(numBays / 2), numBays);
+                    const newFW = { axis_index: midAxis, rei_class: 'REI120', top_type: 'parapet_above_roof' };
+                    setParams(prev => ({...prev, fire_walls: [...(prev.fire_walls || []), newFW]}));
+                  }} className="text-[8px] bg-red-100 text-red-700 px-2 py-1 rounded hover:bg-red-200">+ ÅšOP</button>
+                </div>
+                {(params.fire_walls || []).map((fw, idx) => (
+                  <div key={idx} className="flex gap-1 items-center mb-1 bg-white p-1 rounded border border-red-100">
+                    <span className="text-[8px] font-bold text-gray-500 w-8">OÅ›</span>
+                    <input type="number" min="1" max={Math.max(1, Math.round(params.length / params.bay_spacing)) - 1} value={fw.axis_index}
+                      onChange={(e) => {
+                        const newFW = [...params.fire_walls];
+                        newFW[idx] = {...newFW[idx], axis_index: parseInt(e.target.value) || 1};
+                        setParams(prev => ({...prev, fire_walls: newFW}));
+                      }} className="w-10 p-0.5 border text-[9px] text-center rounded" />
+                    <select value={fw.rei_class} onChange={(e) => {
+                      const newFW = [...params.fire_walls];
+                      newFW[idx] = {...newFW[idx], rei_class: e.target.value};
+                      setParams(prev => ({...prev, fire_walls: newFW}));
+                    }} className="flex-1 p-0.5 border text-[8px] rounded">
+                      <option value="REI60">REI60</option>
+                      <option value="REI120">REI120</option>
+                      <option value="REI240">REI240</option>
+                    </select>
+                    <select value={fw.top_type} onChange={(e) => {
+                      const newFW = [...params.fire_walls];
+                      newFW[idx] = {...newFW[idx], top_type: e.target.value};
+                      setParams(prev => ({...prev, fire_walls: newFW}));
+                    }} className="flex-1 p-0.5 border text-[8px] rounded">
+                      <option value="parapet_above_roof">Attyka</option>
+                      <option value="non_combustible_strip">Pas dachu</option>
+                    </select>
+                    <button onClick={() => {
+                      const newFW = [...params.fire_walls];
+                      newFW.splice(idx, 1);
+                      setParams(prev => ({...prev, fire_walls: newFW}));
+                    }} className="text-[8px] text-red-500 px-1">X</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </CollapsibleSection>
+
+          <CollapsibleSection title="7. Pomieszczenia Techniczne">
+            <div className="flex flex-col gap-2">
+              <button onClick={() => {
+                const newRoom = {
+                  room_id: `tech_${(params.technical_rooms || []).length + 1}`,
+                  width: 6, length: 4, height: 3,
+                  position_anchor: 'corner_left_front', position_offset: [0, 0, 0],
+                  fire_rating: 'REI120', has_own_roof: true, floor_level: 0
+                };
+                setParams(prev => ({...prev, technical_rooms: [...(prev.technical_rooms || []), newRoom]}));
+              }} className="w-full py-1.5 bg-purple-50 text-purple-700 text-[10px] font-bold rounded border border-purple-200 hover:bg-purple-100">
+                + Pomieszczenie techniczne
+              </button>
+
+              {(params.technical_rooms || []).map((room, idx) => (
+                <div key={idx} className="bg-gray-50 p-2 rounded border border-gray-200">
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="text-[9px] font-bold text-purple-800 uppercase">{room.room_id}</span>
+                    <button onClick={() => {
+                      const newRooms = [...params.technical_rooms];
+                      newRooms.splice(idx, 1);
+                      setParams(prev => ({...prev, technical_rooms: newRooms}));
+                    }} className="text-[8px] text-red-500 px-1">X</button>
+                  </div>
+                  <div className="grid grid-cols-3 gap-1 mb-1">
+                    {['width', 'length', 'height'].map(key => (
+                      <div key={key} className="flex flex-col">
+                        <span className="text-[7px] text-gray-400 uppercase">{key === 'width' ? 'Szer' : key === 'length' ? 'DÅ‚' : 'Wys'}</span>
+                        <input type="number" step="0.5" min="2" max="20" value={room[key]} onChange={(e) => {
+                          const newRooms = [...params.technical_rooms];
+                          newRooms[idx] = {...newRooms[idx], [key]: parseFloat(e.target.value) || 2};
+                          setParams(prev => ({...prev, technical_rooms: newRooms}));
+                        }} className="p-0.5 border text-[9px] text-center rounded" />
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex gap-1">
+                    <select value={room.position_anchor} onChange={(e) => {
+                      const newRooms = [...params.technical_rooms];
+                      newRooms[idx] = {...newRooms[idx], position_anchor: e.target.value};
+                      setParams(prev => ({...prev, technical_rooms: newRooms}));
+                    }} className="flex-1 p-0.5 border text-[8px] rounded">
+                      <option value="corner_left_front">Lewy-przÃ³d</option>
+                      <option value="corner_right_front">Prawy-przÃ³d</option>
+                      <option value="corner_left_back">Lewy-tyÅ‚</option>
+                      <option value="corner_right_back">Prawy-tyÅ‚</option>
+                      <option value="custom">WÅ‚asna pozycja</option>
+                    </select>
+                    <select value={room.fire_rating} onChange={(e) => {
+                      const newRooms = [...params.technical_rooms];
+                      newRooms[idx] = {...newRooms[idx], fire_rating: e.target.value};
+                      setParams(prev => ({...prev, technical_rooms: newRooms}));
+                    }} className="w-16 p-0.5 border text-[8px] rounded">
+                      <option value="REI60">REI60</option>
+                      <option value="REI120">REI120</option>
+                      <option value="REI240">REI240</option>
+                    </select>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CollapsibleSection>
+
+          <CollapsibleSection title="8. Biura ZewnÄ™trzne">
+            <div className="flex flex-col gap-2">
+              <button onClick={() => {
+                const newOffice = {
+                  office_id: `ext_office_${(params.external_offices || []).length + 1}`,
+                  width: 8, length: 24, floor_height: 3.3, num_floors: 2,
+                  attached_wall: 'right', position_along_wall: 0,
+                  fire_separation: 'REI60', has_windows: true, window_ratio: 0.4
+                };
+                setParams(prev => ({...prev, external_offices: [...(prev.external_offices || []), newOffice]}));
+              }} className="w-full py-1.5 bg-amber-50 text-amber-700 text-[10px] font-bold rounded border border-amber-200 hover:bg-amber-100">
+                + Biuro zewnÄ™trzne
+              </button>
+
+              {(params.external_offices || []).map((office, idx) => (
+                <div key={idx} className="bg-gray-50 p-2 rounded border border-gray-200">
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="text-[9px] font-bold text-amber-800 uppercase">{office.office_id}</span>
+                    <button onClick={() => {
+                      const arr = [...params.external_offices];
+                      arr.splice(idx, 1);
+                      setParams(prev => ({...prev, external_offices: arr}));
+                    }} className="text-[8px] text-red-500 px-1">X</button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-1 mb-1">
+                    <div className="flex flex-col">
+                      <span className="text-[7px] text-gray-400">GÅ‚Ä™bokoÅ›Ä‡ [m]</span>
+                      <input type="number" step="1" min="4" max="16" value={office.width} onChange={(e) => {
+                        const arr = [...params.external_offices];
+                        arr[idx] = {...arr[idx], width: parseFloat(e.target.value) || 8};
+                        setParams(prev => ({...prev, external_offices: arr}));
+                      }} className="p-0.5 border text-[9px] text-center rounded" />
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-[7px] text-gray-400">DÅ‚ugoÅ›Ä‡ [m]</span>
+                      <input type="number" step="1" min="6" max="80" value={office.length} onChange={(e) => {
+                        const arr = [...params.external_offices];
+                        arr[idx] = {...arr[idx], length: parseFloat(e.target.value) || 24};
+                        setParams(prev => ({...prev, external_offices: arr}));
+                      }} className="p-0.5 border text-[9px] text-center rounded" />
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-[7px] text-gray-400">Kondygnacje</span>
+                      <input type="number" step="1" min="1" max="4" value={office.num_floors} onChange={(e) => {
+                        const arr = [...params.external_offices];
+                        arr[idx] = {...arr[idx], num_floors: parseInt(e.target.value) || 2};
+                        setParams(prev => ({...prev, external_offices: arr}));
+                      }} className="p-0.5 border text-[9px] text-center rounded" />
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-[7px] text-gray-400">Pozycja wzdÅ‚uÅ¼ [m]</span>
+                      <input type="number" step="1" min="0" max="100" value={office.position_along_wall} onChange={(e) => {
+                        const arr = [...params.external_offices];
+                        arr[idx] = {...arr[idx], position_along_wall: parseFloat(e.target.value) || 0};
+                        setParams(prev => ({...prev, external_offices: arr}));
+                      }} className="p-0.5 border text-[9px] text-center rounded" />
+                    </div>
+                  </div>
+                  <div className="flex gap-1">
+                    <select value={office.attached_wall} onChange={(e) => {
+                      const arr = [...params.external_offices];
+                      arr[idx] = {...arr[idx], attached_wall: e.target.value};
+                      setParams(prev => ({...prev, external_offices: arr}));
+                    }} className="flex-1 p-0.5 border text-[8px] rounded">
+                      <option value="left">Lewa</option>
+                      <option value="right">Prawa</option>
+                      <option value="front">PrzÃ³d</option>
+                      <option value="back">TyÅ‚</option>
+                    </select>
+                    <select value={office.fire_separation} onChange={(e) => {
+                      const arr = [...params.external_offices];
+                      arr[idx] = {...arr[idx], fire_separation: e.target.value};
+                      setParams(prev => ({...prev, external_offices: arr}));
+                    }} className="w-16 p-0.5 border text-[8px] rounded">
+                      <option value="REI60">REI60</option>
+                      <option value="REI120">REI120</option>
+                    </select>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CollapsibleSection>
+
+          <CollapsibleSection title="9. Antresole WewnÄ™trzne">
+            <div className="flex flex-col gap-2">
+              <button onClick={() => {
+                const newMez = {
+                  office_id: `mez_${(params.internal_offices || []).length + 1}`,
+                  width: 18, length: 12, floor_height: 3.0, num_floors: 2,
+                  position_x: 0, position_z: 0, fire_separation: 'REI60',
+                  column_grid_x: 6, column_grid_z: 6, has_stairs_internal: true
+                };
+                setParams(prev => ({...prev, internal_offices: [...(prev.internal_offices || []), newMez]}));
+              }} className="w-full py-1.5 bg-indigo-50 text-indigo-700 text-[10px] font-bold rounded border border-indigo-200 hover:bg-indigo-100">
+                + Antresola
+              </button>
+
+              {(params.internal_offices || []).map((mez, idx) => (
+                <div key={idx} className="bg-gray-50 p-2 rounded border border-gray-200">
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="text-[9px] font-bold text-indigo-800 uppercase">{mez.office_id}</span>
+                    <button onClick={() => {
+                      const arr = [...params.internal_offices];
+                      arr.splice(idx, 1);
+                      setParams(prev => ({...prev, internal_offices: arr}));
+                    }} className="text-[8px] text-red-500 px-1">X</button>
+                  </div>
+                  <div className="grid grid-cols-3 gap-1 mb-1">
+                    {[{k:'width',l:'Szer'},{k:'length',l:'DÅ‚'},{k:'num_floors',l:'Kond.'}].map(f => (
+                      <div key={f.k} className="flex flex-col">
+                        <span className="text-[7px] text-gray-400 uppercase">{f.l}</span>
+                        <input type="number" step={f.k === 'num_floors' ? "1" : "1"} min={f.k === 'num_floors' ? 1 : 6} max={f.k === 'num_floors' ? 4 : 60} value={mez[f.k]} onChange={(e) => {
+                          const arr = [...params.internal_offices];
+                          arr[idx] = {...arr[idx], [f.k]: parseFloat(e.target.value) || 1};
+                          setParams(prev => ({...prev, internal_offices: arr}));
+                        }} className="p-0.5 border text-[9px] text-center rounded" />
+                      </div>
+                    ))}
+                  </div>
+                  <div className="grid grid-cols-2 gap-1 mb-1">
+                    <div className="flex flex-col">
+                      <span className="text-[7px] text-gray-400">Pozycja X [m]</span>
+                      <input type="number" step="1" value={mez.position_x} onChange={(e) => {
+                        const arr = [...params.internal_offices];
+                        arr[idx] = {...arr[idx], position_x: parseFloat(e.target.value) || 0};
+                        setParams(prev => ({...prev, internal_offices: arr}));
+                      }} className="p-0.5 border text-[9px] text-center rounded" />
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-[7px] text-gray-400">Pozycja Z [m]</span>
+                      <input type="number" step="1" value={mez.position_z} onChange={(e) => {
+                        const arr = [...params.internal_offices];
+                        arr[idx] = {...arr[idx], position_z: parseFloat(e.target.value) || 0};
+                        setParams(prev => ({...prev, internal_offices: arr}));
+                      }} className="p-0.5 border text-[9px] text-center rounded" />
+                    </div>
+                  </div>
+                  <select value={mez.fire_separation} onChange={(e) => {
+                    const arr = [...params.internal_offices];
+                    arr[idx] = {...arr[idx], fire_separation: e.target.value};
+                    setParams(prev => ({...prev, internal_offices: arr}));
+                  }} className="w-full p-0.5 border text-[8px] rounded">
+                    <option value="none">Bez wydzielenia</option>
+                    <option value="REI60">REI60</option>
+                    <option value="REI120">REI120</option>
+                  </select>
+                  {mez.num_floors * (mez.floor_height || 3) > params.clear_height && (
+                    <div className="mt-1 text-[8px] text-red-600 font-bold">Uwaga: antresola przekracza clear_height!</div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </CollapsibleSection>
+
+          <CollapsibleSection title="10. Rezerwa pod Biura (Dach)">
+            <div className="flex flex-col gap-2">
+              <button onClick={() => {
+                const numBays = Math.max(1, Math.round(params.length / params.bay_spacing));
+                const newZone = {
+                  zone_id: `reserve_${(params.office_reserve_zones || []).length + 1}`,
+                  start_bay_index: 2, end_bay_index: Math.min(4, numBays - 1),
+                  start_axis_index: 0, end_axis_index: 1,
+                  roof_type_override: null, truss_fire_rating: 'R60',
+                  purlin_doubling_gap: 0.30, separate_drainage: false
+                };
+                setParams(prev => ({...prev, office_reserve_zones: [...(prev.office_reserve_zones || []), newZone]}));
+              }} className="w-full py-1.5 bg-yellow-50 text-yellow-700 text-[10px] font-bold rounded border border-yellow-200 hover:bg-yellow-100">
+                + Strefa rezerwy
+              </button>
+
+              {(params.office_reserve_zones || []).map((zone, idx) => (
+                <div key={idx} className="bg-yellow-50/50 p-2 rounded border border-yellow-200">
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="text-[9px] font-bold text-yellow-800 uppercase">{zone.zone_id}</span>
+                    <button onClick={() => {
+                      const arr = [...params.office_reserve_zones];
+                      arr.splice(idx, 1);
+                      setParams(prev => ({...prev, office_reserve_zones: arr}));
+                    }} className="text-[8px] text-red-500 px-1">X</button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-1 mb-1">
+                    <div className="flex flex-col">
+                      <span className="text-[7px] text-gray-400">PrzÄ™sÅ‚o od</span>
+                      <input type="number" step="1" min="0" max={Math.max(1, Math.round(params.length / params.bay_spacing)) - 1} value={zone.start_bay_index} onChange={(e) => {
+                        const arr = [...params.office_reserve_zones];
+                        arr[idx] = {...arr[idx], start_bay_index: parseInt(e.target.value) || 0};
+                        setParams(prev => ({...prev, office_reserve_zones: arr}));
+                      }} className="p-0.5 border text-[9px] text-center rounded" />
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-[7px] text-gray-400">PrzÄ™sÅ‚o do</span>
+                      <input type="number" step="1" min="0" max={Math.max(1, Math.round(params.length / params.bay_spacing)) - 1} value={zone.end_bay_index} onChange={(e) => {
+                        const arr = [...params.office_reserve_zones];
+                        arr[idx] = {...arr[idx], end_bay_index: parseInt(e.target.value) || 0};
+                        setParams(prev => ({...prev, office_reserve_zones: arr}));
+                      }} className="p-0.5 border text-[9px] text-center rounded" />
+                    </div>
+                  </div>
+                  <div className="flex gap-1">
+                    <select value={zone.truss_fire_rating} onChange={(e) => {
+                      const arr = [...params.office_reserve_zones];
+                      arr[idx] = {...arr[idx], truss_fire_rating: e.target.value};
+                      setParams(prev => ({...prev, office_reserve_zones: arr}));
+                    }} className="flex-1 p-0.5 border text-[8px] rounded">
+                      <option value="R30">R30</option>
+                      <option value="R60">R60</option>
+                      <option value="R120">R120</option>
+                    </select>
+                    <div className="flex flex-col">
+                      <span className="text-[7px] text-gray-400">Gap [m]</span>
+                      <input type="number" step="0.05" min="0.15" max="0.60" value={zone.purlin_doubling_gap} onChange={(e) => {
+                        const arr = [...params.office_reserve_zones];
+                        arr[idx] = {...arr[idx], purlin_doubling_gap: parseFloat(e.target.value) || 0.30};
+                        setParams(prev => ({...prev, office_reserve_zones: arr}));
+                      }} className="w-14 p-0.5 border text-[9px] text-center rounded" />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CollapsibleSection>
+        </div>
+      )}
+
+      {params.hall_type === 'complex' && (
+        <div className="flex-1 overflow-y-auto pr-1 custom-scrollbar">
+          <CollapsibleSection title="Bloki (BryÅ‚y)" defaultOpen={true}>
+            <div className="flex flex-col gap-3">
+              <button onClick={() => {
+                const newBlock = {
+                  block_id: `Block_${(params.blocks || []).length + 1}`,
+                  width: 30, length: 60, clear_height: 10, bay_spacing: 6,
+                  roof_angle: 3, roof_drainage_type: 'gravity', number_of_aisles: 1,
+                  position_offset: [0, 0, 0], rotation_y: 0, connection_type: 'expansion_joint'
+                };
+                setParams(prev => ({...prev, blocks: [...(prev.blocks || []), newBlock]}));
+              }} className="w-full py-2 bg-green-50 text-green-700 text-[10px] font-bold rounded border border-green-200 hover:bg-green-100">
+                + Dodaj Blok
+              </button>
+
+              {(params.blocks || []).map((block, idx) => (
+                <div key={idx} className="bg-gray-50 p-2 rounded border border-gray-200">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-[10px] font-black text-blue-800 uppercase">{block.block_id}</span>
+                    <button onClick={() => {
+                      const newBlocks = [...params.blocks];
+                      newBlocks.splice(idx, 1);
+                      setParams(prev => ({...prev, blocks: newBlocks}));
+                    }} className="text-[8px] bg-red-50 text-red-600 px-2 py-1 rounded hover:bg-red-100">UsuÅ„</button>
+                  </div>
+                  
+                  {[
+                    {key: 'width', label: 'Szer. [m]', min: 10, max: 60, step: 1},
+                    {key: 'length', label: 'DÅ‚. [m]', min: 10, max: 120, step: 1},
+                    {key: 'clear_height', label: 'Wys. [m]', min: 4, max: 18, step: 0.5},
+                    {key: 'bay_spacing', label: 'Rozstaw [m]', min: 4, max: 12, step: 0.5},
+                  ].map(f => (
+                    <div key={f.key} className="flex items-center gap-2 mb-1">
+                      <span className="text-[8px] font-bold text-gray-500 uppercase w-16">{f.label}</span>
+                      <input type="range" min={f.min} max={f.max} step={f.step} value={block[f.key]}
+                        onChange={(e) => {
+                          const newBlocks = [...params.blocks];
+                          newBlocks[idx] = {...newBlocks[idx], [f.key]: parseFloat(e.target.value)};
+                          setParams(prev => ({...prev, blocks: newBlocks}));
+                        }} className="flex-1 h-1 bg-gray-200 rounded accent-blue-600" />
+                      <span className="text-[9px] font-mono text-blue-600 w-8 text-right">{block[f.key]}</span>
+                    </div>
+                  ))}
+
+                  <div className="border-t border-gray-200 mt-2 pt-2">
+                    <span className="text-[8px] font-bold text-gray-500 uppercase block mb-1">Offset [X, Y, Z]</span>
+                    <div className="flex gap-1">
+                      {[0, 1, 2].map(i => (
+                        <input key={i} type="number" step="1" value={block.position_offset[i]}
+                          onChange={(e) => {
+                            const newBlocks = [...params.blocks];
+                            const newOffset = [...newBlocks[idx].position_offset];
+                            newOffset[i] = parseFloat(e.target.value) || 0;
+                            newBlocks[idx] = {...newBlocks[idx], position_offset: newOffset};
+                            setParams(prev => ({...prev, blocks: newBlocks}));
+                          }} className="w-full p-1 border text-[9px] text-center rounded font-mono" />
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2 mt-2">
+                    <div className="flex-1">
+                      <span className="text-[8px] font-bold text-gray-500 uppercase block">Rotacja Y</span>
+                      <select value={block.rotation_y} onChange={(e) => {
+                        const newBlocks = [...params.blocks];
+                        newBlocks[idx] = {...newBlocks[idx], rotation_y: parseFloat(e.target.value)};
+                        setParams(prev => ({...prev, blocks: newBlocks}));
+                      }} className="w-full p-1 border rounded text-[9px]">
+                        <option value="0">0Â°</option>
+                        <option value="90">90Â°</option>
+                        <option value="180">180Â°</option>
+                        <option value="270">270Â°</option>
+                      </select>
+                    </div>
+                    <div className="flex-1">
+                      <span className="text-[8px] font-bold text-gray-500 uppercase block">PoÅ‚Ä…czenie</span>
+                      <select value={block.connection_type} onChange={(e) => {
+                        const newBlocks = [...params.blocks];
+                        newBlocks[idx] = {...newBlocks[idx], connection_type: e.target.value};
+                        setParams(prev => ({...prev, blocks: newBlocks}));
+                      }} className="w-full p-1 border rounded text-[9px]">
+                        <option value="expansion_joint">Dylatacja</option>
+                        <option value="fire_wall">Åšciana PPOÅ»</option>
+                        <option value="merged">Scalony</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CollapsibleSection>
+        </div>
+      )}
+
+      <button onClick={onGenerate} disabled={isLoading} 
+        className="mt-3 w-full py-3 rounded-lg text-white font-black uppercase tracking-widest text-[11px] bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300">
+        {isLoading ? 'Przeliczanie...' : 'Buduj Model 3D'}
+      </button>
+
+      {validation && validation.clashes && validation.clashes.length > 0 && (
+        <div className="mt-2 max-h-32 overflow-y-auto">
+          {validation.clashes.map((clash, idx) => (
+            <div key={idx} className={`text-[9px] p-1.5 mb-1 rounded border ${clash.severity === 'error' ? 'bg-red-50 border-red-200 text-red-700' : 'bg-yellow-50 border-yellow-200 text-yellow-700'}`}>
+              <span className="font-bold uppercase">{clash.severity === 'error' ? 'BÅÄ„D' : 'UWAGA'}:</span> {clash.message}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default Controls;

@@ -1,0 +1,132 @@
+{
+  "pbtResults": {},
+  "executionHistory": {
+    "0. Postawić infrastrukturę testową i zdjąć snapshoty preservation (PRZED jakąkolwiek zmianą kodu)": [
+      {
+        "executionId": "e8f42e8e-880b-4afc-9f19-172511017441",
+        "chatSessionId": "sess_0f9953df-f52e-45c3-ab0c-88888d93f7f5",
+        "timestamp": 1787463534145
+      },
+      {
+        "executionId": "e8f42e8e-880b-4afc-9f19-172511017441",
+        "chatSessionId": "sess_0f9953df-f52e-45c3-ab0c-88888d93f7f5",
+        "timestamp": 1787463547849
+      },
+      {
+        "executionId": "e8f42e8e-880b-4afc-9f19-172511017441",
+        "chatSessionId": "sess_0f9953df-f52e-45c3-ab0c-88888d93f7f5",
+        "timestamp": 1787464304686
+      }
+    ],
+    "1. Napisać testy eksploracyjne warunku błędu (na NIEPOPRAWIONYM kodzie)": [
+      {
+        "executionId": "e8f42e8e-880b-4afc-9f19-172511017441",
+        "chatSessionId": "sess_0f9953df-f52e-45c3-ab0c-88888d93f7f5",
+        "timestamp": 1787463534610
+      },
+      {
+        "executionId": "e8f42e8e-880b-4afc-9f19-172511017441",
+        "chatSessionId": "sess_0f9953df-f52e-45c3-ab0c-88888d93f7f5",
+        "timestamp": 1787464312546
+      }
+    ],
+    "2. Napisać testy własnościowe zachowania (PRZED implementacją naprawy)": [
+      {
+        "executionId": "e8f42e8e-880b-4afc-9f19-172511017441",
+        "chatSessionId": "sess_0f9953df-f52e-45c3-ab0c-88888d93f7f5",
+        "timestamp": 1787463534670
+      }
+    ],
+    "3.1 `handleChange` w `Controls.jsx` — rozgałęzienie po typie kontrolki DOM": [
+      {
+        "executionId": "e8f42e8e-880b-4afc-9f19-172511017441",
+        "chatSessionId": "sess_0f9953df-f52e-45c3-ab0c-88888d93f7f5",
+        "timestamp": 1787463534704
+      }
+    ],
+    "3.2 `GridSystem3D` — rozdzielenie rzędnych wysokościowych i kategoryzacja węzłów": [
+      {
+        "executionId": "e8f42e8e-880b-4afc-9f19-172511017441",
+        "chatSessionId": "sess_0f9953df-f52e-45c3-ab0c-88888d93f7f5",
+        "timestamp": 1787463534736
+      }
+    ],
+    "3.3 `RoofFactory` — korekta rotacji połaci dachu grawitacyjnego": [
+      {
+        "executionId": "e8f42e8e-880b-4afc-9f19-172511017441",
+        "chatSessionId": "sess_0f9953df-f52e-45c3-ab0c-88888d93f7f5",
+        "timestamp": 1787463534765
+      }
+    ],
+    "3.4 `FireWallFactory` + `SecondaryStructureFactory` — migracja wywołań `get_parapet_height()`": [
+      {
+        "executionId": "e8f42e8e-880b-4afc-9f19-172511017441",
+        "chatSessionId": "sess_0f9953df-f52e-45c3-ab0c-88888d93f7f5",
+        "timestamp": 1787463534798
+      }
+    ],
+    "3.5 `CladdingFactory` — zakończenie ścian na okapie i schodkowe zamknięcie szczytów": [
+      {
+        "executionId": "e8f42e8e-880b-4afc-9f19-172511017441",
+        "chatSessionId": "sess_0f9953df-f52e-45c3-ab0c-88888d93f7f5",
+        "timestamp": 1787463534865
+      }
+    ],
+    "3.6 `models.py` + `defaults.py` + `ColumnFactory` / `FoundationFactory` / `PlinthFactory` — kategorie gabarytów": [
+      {
+        "executionId": "e8f42e8e-880b-4afc-9f19-172511017441",
+        "chatSessionId": "sess_0f9953df-f52e-45c3-ab0c-88888d93f7f5",
+        "timestamp": 1787463534916
+      }
+    ],
+    "3.7 `NumberSlider.jsx` (nowy) + sekcja 1 `Controls.jsx` — pole numeryczne i poszerzone zakresy": [
+      {
+        "executionId": "e8f42e8e-880b-4afc-9f19-172511017441",
+        "chatSessionId": "sess_0f9953df-f52e-45c3-ab0c-88888d93f7f5",
+        "timestamp": 1787463534949
+      }
+    ],
+    "3.8 `DockGridSelector.jsx` (wydzielony z `Controls.jsx`) — rodzaj otworu i zaznaczanie zakresem": [
+      {
+        "executionId": "e8f42e8e-880b-4afc-9f19-172511017441",
+        "chatSessionId": "sess_0f9953df-f52e-45c3-ab0c-88888d93f7f5",
+        "timestamp": 1787463534979
+      }
+    ],
+    "3.9 Obudowa pionowa — backend (`CladdingFactory`, `models.py`, `defaults.py`) i UI (`Controls.jsx`, `App.jsx`, `Scene3D.jsx`)": [
+      {
+        "executionId": "e8f42e8e-880b-4afc-9f19-172511017441",
+        "chatSessionId": "sess_0f9953df-f52e-45c3-ab0c-88888d93f7f5",
+        "timestamp": 1787463535009
+      }
+    ],
+    "3.10 `Controls.jsx` — nazwy sekcji, lista kategorii i niemutowalna edycja gabarytów": [
+      {
+        "executionId": "e8f42e8e-880b-4afc-9f19-172511017441",
+        "chatSessionId": "sess_0f9953df-f52e-45c3-ab0c-88888d93f7f5",
+        "timestamp": 1787463535050
+      }
+    ],
+    "3.11 Sprawdzenie naprawy — testy eksploracyjne warunku błędu przechodzą": [
+      {
+        "executionId": "e8f42e8e-880b-4afc-9f19-172511017441",
+        "chatSessionId": "sess_0f9953df-f52e-45c3-ab0c-88888d93f7f5",
+        "timestamp": 1787463535093
+      }
+    ],
+    "3.12 Sprawdzenie zachowania — testy preservation nadal przechodzą": [
+      {
+        "executionId": "e8f42e8e-880b-4afc-9f19-172511017441",
+        "chatSessionId": "sess_0f9953df-f52e-45c3-ab0c-88888d93f7f5",
+        "timestamp": 1787463535121
+      }
+    ],
+    "4. Checkpoint - Ensure all tests pass": [
+      {
+        "executionId": "e8f42e8e-880b-4afc-9f19-172511017441",
+        "chatSessionId": "sess_0f9953df-f52e-45c3-ab0c-88888d93f7f5",
+        "timestamp": 1787463535152
+      }
+    ]
+  }
+}

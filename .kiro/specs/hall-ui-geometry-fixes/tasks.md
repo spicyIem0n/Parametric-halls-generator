@@ -1,0 +1,200 @@
+# Implementation Plan
+
+- [x] 0. Postawić infrastrukturę testową i zdjąć snapshoty preservation (PRZED jakąkolwiek zmianą kodu)
+  - **KRYTYCZNE**: to zadanie MUSI zostać zakończone przed pierwszą zmianą backendu — po zmianie kodu snapshotów referencyjnych nie da się już zdjąć
+  - Backend: dopisać `pytest`, `hypothesis` do `backend/requirements.txt` (wersje przypięte), utworzyć `backend/tests/` z `__init__.py` i `conftest.py` (fixture budująca `HallParameters` referencyjne)
+  - Backend: utworzyć `backend/tests/reference/` — kopia niepoprawionych modułów generatora (`grid_system.py`, `roof_factory.py`, `cladding_factory.py`, `secondary_structure_factory.py`, `fire_wall_factory.py`, `column_factory.py`, `foundation_factory.py`, `models.py`, `defaults.py`) używana jako `originalSystem(input)` w testach preservation
+  - Backend: utworzyć `backend/tests/snapshots/` i skrypt zdejmujący snapshot — lista komponentów posortowana po `(type, position, scale)`, serializacja JSON z dokładnością 1e-9
+  - Backend: zdjąć snapshoty dla zestawu referencyjnego (`roof_drainage_type='vacuum'`, `column_method='default'`, `foundation_method='default'`, `cladding_orientation='horizontal'`): 30×60 1-nawowa, 60×120 2-nawowa, 20×40 4-nawowa, warianty z `docks_config` (doki + bramy), warianty z ŚOP dla obu `top_type`, wariant `hall_type='complex'` z dwoma blokami
+  - Frontend: dopisać devDependencies `vitest`, `@testing-library/react`, `@testing-library/jest-dom`, `jsdom`, `fast-check` (wersje przypięte), skrypt `"test": "vitest --run"` w `frontend/package.json`, konfiguracja `test: { environment: 'jsdom', setupFiles }` w `vite.config.js`, katalog `frontend/src/__tests__/`
+  - Uruchomić `pytest` i `npm run test` na puste zestawy testów, aby potwierdzić działanie obu runnerów
+  - _Requirements: 3.1, 3.2, 3.5, 3.6, 3.8, 3.9, 3.10_
+
+- [ ] 1. Napisać testy eksploracyjne warunku błędu (na NIEPOPRAWIONYM kodzie)
+  - **Property 1: Bug Condition** - Poprawne przekazanie typów pól i geometria zgodna z konstrukcją
+  - **KRYTYCZNE**: ten test MUSI ZAWIEŚĆ na niepoprawionym kodzie — porażka potwierdza istnienie błędu
+  - **NIE naprawiaj testu ani kodu, gdy test zawiedzie** — to jest oczekiwany wynik tego zadania
+  - **UWAGA**: test koduje oczekiwane zachowanie i będzie walidował naprawę, gdy przejdzie po implementacji
+  - **CEL**: wydobyć kontrprzykłady demonstrujące błąd i potwierdzić lub odrzucić hipotezy z sekcji Hypothesized Root Cause
+  - **Scoped PBT Approach**: defekty C1–C3 są deterministyczne — property zawężone do konkretnych przypadków (30×60 m, kąt 10°, `truss_depth=0.8`); C4–C7 generowane szerzej przez Hypothesis / fast-check
+  - Frontend (`frontend/src/__tests__/controls.handleChange.explore.test.jsx`):
+    - C1: `fireEvent.change(select[name=roof_drainage_type], { target: { value: 'gravity' } })` → asercja `params.roof_drainage_type === 'gravity'` (na niepoprawionym kodzie `NaN`)
+    - C1: `JSON.stringify(paramsAfterChange)` nie zawiera `"roof_drainage_type":null` (na niepoprawionym kodzie zawiera)
+    - C1: to samo dla `column_method='manual'` i `foundation_method='manual'`
+    - C6: edycja `manual_column_sections.external_main[0]` → asercja, że snapshot `prevParams` przechwycony przed edycją nie zmienił wartości (na niepoprawionym kodzie zmienił — dowód mutacji w miejscu)
+  - Backend (`backend/tests/test_bug_condition_explore.py`):
+    - C1: `TestClient` `POST /generate-hall` z `roof_drainage_type=None` → 422 i `Input should be a valid string`
+    - C2: dla `gravity` 30×60, 10° — porównanie znaku `sin(rotation_z)` każdej połaci ze znakiem nachylenia górnego pasa dźwigara po tej samej stronie; rzędne skrajne panelu vs. `get_roof_height_at(±half_width)` i `get_roof_height_at(0)` (oczekiwany kontrprzykład: znaki przeciwne, kalenica poszycia 8.88 m poniżej okapu 11.58 m)
+    - C3: dla `gravity` max `position.y + scale.y/2` po `sandwich_panel` ścian wzdłużnych ≤ `clear_height + truss_depth + eps` (oczekiwane przekroczenie o `half_width·tan(angle) + 0.20` ≈ 2.84 m)
+    - C4: generacja dla `foundation_method='manual'` z `manual_sizes['external_dock'] = [9, 9, 9]` daje listę komponentów identyczną jak dla `[2.7, 3.5, 0.45]` (potwierdzenie martwego pola)
+    - C5: dla 30×60 cztery węzły narożne — asercja, że ich stopy różnią się od stóp pozostałych węzłów osi skrajnych przy `manual_sizes['external_corner']` o odmiennych wartościach (na niepoprawionym kodzie kategoria nie istnieje)
+    - C7: `cladding_orientation='vertical'` daje listę komponentów identyczną jak `'horizontal'` (potwierdzenie, że parametr jest martwy)
+  - Uruchomić testy na NIEPOPRAWIONYM kodzie
+  - **OCZEKIWANY WYNIK**: testy ZAWODZĄ (to jest poprawne — dowodzi istnienia błędu)
+  - Udokumentować kontrprzykłady w komentarzach testów, aby zrozumieć źródło defektu; rozbieżność z hipotezą oznacza powrót do sekcji Hypothesized Root Cause
+  - Zadanie zamknięte, gdy testy są napisane, uruchomione i porażka udokumentowana
+  - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.10, 2.12_
+
+- [ ] 2. Napisać testy własnościowe zachowania (PRZED implementacją naprawy)
+  - **Property 2: Preservation** - Niezmienione zachowanie dla wejść poza warunkiem błędu
+  - **WAŻNE**: metodyka obserwacja-najpierw — najpierw uruchom NIEPOPRAWIONY kod, zapisz faktyczne wyniki, potem napisz property na podstawie obserwacji
+  - Wejścia poza warunkiem błędu: `roof_drainage_type='vacuum'`, `column_method='default'`, `foundation_method='default'`, `cladding_orientation='horizontal'`, pola `range`/`number` i checkboxy w `handleChange`
+  - Backend (`backend/tests/test_preservation.py`), Hypothesis generuje `HallParameters` z ograniczeniem `NOT isBugCondition`:
+    - dach podciśnieniowy: liczba i pozycje `roof_panel`, `drainage_inlet`, `purlin_strut` dla losowych `drainage_zones_x/z`, `roof_slope_percent` (3.1)
+    - gabaryty domyślne: przekroje słupów 0.4×0.4 i 0.3×0.3, stopy 2.0×2.0, 1.5×1.5, 1.2×1.2 (3.2)
+    - obudowa pozioma: `sandwich_panel` dla `horizontal` + `vacuum` z dokami i bramami, w tym wycięcia otworów i zamknięcia szczytów (3.5)
+    - ŚOP: `wall_top_y` dla obu `top_type` i obu typów dachu — obserwacja PRZED migracją `get_parapet_height()` (3.9)
+    - strefy dokowe: głębokości słupów i stóp w przęsłach z dokiem przy `dock_foundation_depth` (3.6)
+    - tryb `complex`: transformacja offsetu i rotacji dla dwóch bloków (3.10)
+    - kontrakt `Component3D`: `type: str`, `position/rotation/scale` długości 3, `meta` jako `dict[str, str] | None` (3.8)
+    - `GridSystem3D` jako jedyne źródło osi i slotów; zatrzask długości hali do wielokrotności rozstawu ram (3.7)
+    - porównanie z `backend/tests/reference/` i snapshotami z zadania 0 — identyczność listy posortowanej po `(type, position, scale)` z dokładnością 1e-9
+    - przypadki brzegowe wymuszone w strategii: kąt 2° i 35°, `bay_spacing` dokładnie 8.0 m, `bay_spacing` niedzielące długości, hala 1- i 4-nawowa
+  - Frontend (`frontend/src/__tests__/preservation.test.jsx`), fast-check:
+    - suwaki: przesunięcie `input type="range"` aktualizuje parametr; `parseFloat` dla `range`/`number` bez zmian; checkboxy używają `checked` (3.3)
+    - doki: „Max Doki L/R” wypełnia całą stronę wartością `dock`, „Czyść L/R” usuwa klucze tej strony, klik pojedynczy zmienia wyłącznie jeden slot (3.4)
+    - handlery inline sekcji 6–10 (ŚOP, biura, antresole, rezerwy) — bez zmian (3.9)
+    - `/validate-hall`: format listy kolizji i prezentacja w panelu (3.11)
+  - Uruchomić testy na NIEPOPRAWIONYM kodzie
+  - **OCZEKIWANY WYNIK**: testy PRZECHODZĄ (to potwierdza bazowe zachowanie do zachowania)
+  - Zadanie zamknięte, gdy testy są napisane, uruchomione i przechodzą na niepoprawionym kodzie
+  - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8, 3.9, 3.10, 3.11_
+
+- [ ] 3. Naprawa defektów UI i geometrii hali (kolejność wdrożenia z sekcji Fix Implementation)
+
+  - [ ] 3.1 `handleChange` w `Controls.jsx` — rozgałęzienie po typie kontrolki DOM
+    - Trzy przypadki zamiast dwóch: `checkbox` → `checked`, `range`/`number`/`NUMERIC_SELECT_FIELDS` → liczba, pozostałe (`select-one`, `text`) → `value` jako `str`
+    - Straż `Number.isFinite(parsed)` — puste pole `number` zwraca `prev` i nie wprowadza `NaN` do stanu
+    - `Math.round` dla `INTEGER_FIELDS` = `number_of_aisles`, `drainage_zones_x`, `drainage_zones_z`
+    - `setParams(prev => ...)` bez odczytu `params` z domknięcia
+    - `NUMERIC_SELECT_FIELDS` jako pusty `Set` — furtka na przyszłe selecty liczbowe
+    - Po tej zmianie C2 i C3 stają się obserwowalne z UI (odblokowanie `roof_drainage_type='gravity'`)
+    - _Bug_Condition: C1 — `uiEvent.target.type IN ['select-one','text'] AND NOT isNumeric(value)`_
+    - _Expected_Behavior: Property 1 (a) — wartość tekstowa dociera jako `str`, odpowiedź 200 z niepustą listą komponentów_
+    - _Preservation: 3.3 — konwersja `range`/`number` do `float` i checkboxy bez zmian_
+    - _Requirements: 2.1, 2.4_
+
+  - [ ] 3.2 `GridSystem3D` — rozdzielenie rzędnych wysokościowych i kategoryzacja węzłów
+    - Dodać `get_eave_height()` = `clear_height + truss_depth`
+    - Dodać `get_max_roof_height()` — `gravity`: okap + `half_width·tan(roof_angle)`; `vacuum`: odtworzenie starej formuły `max_roof_h` co do znaku i kolejności działań
+    - Dodać `get_wall_top_height()` — `gravity`: okap (brak attyki); `vacuum`: `get_max_roof_height() + DEFAULTS.parapet_extension`
+    - Dodać `get_gable_wall_top_at(x)` — `gravity`: `get_roof_height_at(clamp(x, ±half_width))`; `vacuum`: `get_wall_top_height()`
+    - Usunąć `get_parapet_height()` po zmigrowaniu wszystkich 6 wywołań (zadania 3.3–3.5)
+    - `GridNode`: pole `is_corner: bool`; metody `is_corner_node(frame_idx, axis_idx)`, `get_column_category(node)`; stała `CLADDING_COLUMN_CATEGORY = "external_intermediate_cladding"`
+    - _Bug_Condition: C3 — `wallTopHeight(params) > eaveHeight(params) + tolerance` dla `gravity`; C5 — `isCorner(node) AND categoryOf(node) <> 'external_corner'`_
+    - _Expected_Behavior: Property 1 (c), (d) — ściana wzdłużna kończy się na okapie, kategoria wynika z położenia węzła_
+    - _Preservation: 3.5, 3.7 — `get_wall_top_height()` dla `vacuum` równe staremu `get_parapet_height()`; `GridSystem3D` pozostaje jedynym źródłem rzędnych_
+    - _Requirements: 2.3, 2.6_
+
+  - [ ] 3.3 `RoofFactory` — korekta rotacji połaci dachu grawitacyjnego
+    - Zamiana znaków rotacji w ETAP 3, gałąź `gravity`: lewa połać `+angle_rad`, prawa `-angle_rad`
+    - Offset grubości `(roof_panel_thickness / 2) / cos(angle_rad)` zamiast `t / 2` — spód płyty na linii górnego pasa
+    - Bez zmian: `position`, `scale`, `chord_len_ext`, liczba i typ komponentów oraz cała gałąź `vacuum`
+    - _Bug_Condition: C2 — `sign(slope(panel)) <> sign(slope(trussTopChord(params, panel.side)))`_
+    - _Expected_Behavior: Property 1 (b) — kalenica w osi hali, okapy na `clear_height + truss_depth`, poszycie oparte na górnym pasie_
+    - _Preservation: 3.1 — gałąź `vacuum` (koperty, wpusty, słupki dystansowe) nietknięta_
+    - _Requirements: 2.2_
+
+  - [ ] 3.4 `FireWallFactory` + `SecondaryStructureFactory` — migracja wywołań `get_parapet_height()`
+    - `FireWallFactory`: `parapet_above_roof` → `get_max_roof_height() + DEFAULTS.parapet_extension + 0.10`, pozostałe → `get_max_roof_height()`; obie formuły dają liczby identyczne ze starymi dla `vacuum` i `gravity`
+    - `SecondaryStructureFactory._generate_wall_girts` i `_generate_trimmers`: `get_parapet_height()` → `get_wall_top_height()`
+    - `SecondaryStructureFactory._generate_gable_girts`: poziom rygla przycinany do linii połaci — podział na odcinki tam, gdzie `get_gable_wall_top_at(x)` spada poniżej rzędnej rygla; dla `vacuum` jeden odcinek pełnej szerokości jak dziś
+    - Pominięcie generowania `girt` przy `cladding_orientation == 'vertical'` (funkcję przejmują `cladding_rail`); `trimmer` wokół otworów bez zmian
+    - _Bug_Condition: C3 — rygle i ŚOP liczone z przeciążonej metody wysokościowej_
+    - _Expected_Behavior: Property 1 (c) — rygle ścian wzdłużnych kończą się na okapie, rygle szczytowe idą po linii połaci_
+    - _Preservation: 3.1, 3.9 — `wall_top_y` ŚOP niezmienione dla obu `top_type` i obu typów dachu; ŚOP nadal wychodzi ponad kalenicę_
+    - _Requirements: 2.3, 2.12_
+
+  - [ ] 3.5 `CladdingFactory` — zakończenie ścian na okapie i schodkowe zamknięcie szczytów
+    - Rozgałęzienie w `generate()`: `cladding_orientation == 'vertical'` → `_generate_vertical`, w przeciwnym razie `_generate_horizontal` (ścieżka zachowana 1:1)
+    - `_build_longitudinal_wall(...)`: wysokość `grid.get_wall_top_height()` zamiast `parapet_h`; logika otworów bez zmian dla `horizontal`
+    - `_build_gable_wall(...)`: `vacuum` → jeden panel pełnej szerokości i wysokości `get_wall_top_height()` (dokładnie jak dziś); `gravity` → podział szerokości zewnętrznej na segmenty `cladding_module_width` (reszta domykana węższym segmentem), wysokość segmentu = `get_gable_wall_top_at(x_krawędzi_bliższej_kalenicy)` — brak szczelin, nadmiar schowany pod płytą dachową
+    - **Świadoma decyzja z designu**: NIE dodawać warunku `if not params.has_cladding: return []` — to zmiana zachowania dla `has_cladding=False`, poza zakresem poprawki
+    - _Bug_Condition: C3 — attyka `max_roof + 0.20` zabudowująca dach dwuspadowy_
+    - _Expected_Behavior: Property 1 (c) — ściany wzdłużne do okapu, szczyty zamknięte do linii połaci_
+    - _Preservation: 3.5 — obudowa dla `horizontal` + `vacuum` identyczna, w tym wycięcia otworów i zamknięcia narożników szczytów_
+    - _Requirements: 2.3_
+
+  - [ ] 3.6 `models.py` + `defaults.py` + `ColumnFactory` / `FoundationFactory` / `PlinthFactory` — kategorie gabarytów
+    - `models.py`: `manual_sizes` i `manual_column_sections` na czterech kluczach `external_main`, `external_corner`, `external_intermediate_cladding`, `internal_main`; usunięcie `external_dock` / `internal_dock`
+    - `defaults.py`: `foundation_sizes` i `column_sections` na tych samych czterech kluczach; `external_corner` = `external_main`, `external_intermediate_cladding` = dawne `intermediate_cladding`
+    - `defaults.py`: `LEGACY_CATEGORY_ALIASES` (`intermediate_cladding` → `external_intermediate_cladding`, `external_corner` → `external_main`) dla wstecznej zgodności żądań
+    - Wspólne resolvery `resolve_column_section(params, category)` i `resolve_foundation_size(params, category)` — kolejność szukania: klucz nowy → alias legacy → `DEFAULTS`
+    - `ColumnFactory`: kategoria z `grid.get_column_category(node)` dla słupów ram głównych; `GridSystem3D.CLADDING_COLUMN_CATEGORY` dla słupów szczytowych i pośrednich pod obudowę; koniec duplikacji `is_external ? ... : ...`
+    - `FoundationFactory`: analogicznie przez `resolve_foundation_size`; `PlinthFactory` → `resolve_foundation_size(params, "external_main")`
+    - _Bug_Condition: C4 — `category NOT IN categoriesReadByFactories()`; C5 — brak kategorii narożnej i pośredniej_
+    - _Expected_Behavior: Property 1 (d) — przekrój i stopa z kategorii wynikającej z położenia węzła_
+    - _Preservation: 3.2, 3.6, 3.7 — wartości domyślne nowych kategorii równe dotychczasowym, więc `default` nie zmienia geometrii; `dock_foundation_depth` bez zmian_
+    - _Requirements: 2.5, 2.6_
+
+  - [ ] 3.7 `NumberSlider.jsx` (nowy) + sekcja 1 `Controls.jsx` — pole numeryczne i poszerzone zakresy
+    - `NumberSlider`: suwak kontrolowany wartością z `params`, input trzyma `draft` (string) dla wartości pośrednich
+    - Propagacja podczas pisania tylko dla wartości w zakresie; clamp i normalizacja na `blur` i `Enter`; niepoprawna treść wraca do ostatniej dobrej wartości
+    - Synchronizacja suwak → input w `useEffect`, wyłącznie gdy input nie jest w fokusie
+    - Flaga `integer` dla `number_of_aisles`; `onCommit(name, value)` woła to samo `setParams(prev => ...)` co `handleChange`
+    - Sekcja 1 na `NumberSlider`: `width` 10–180, `length` 10–360, `clear_height` 4–18, `number_of_aisles` 1–12 (integer), `bay_spacing` 4–12
+    - _Bug_Condition: C7 — `interaction IN ['typeExactDimension','setWidthAbove60','setLengthAbove120','setAislesAbove4'] AND NOT uiSupports(interaction)`_
+    - _Expected_Behavior: Property 1 (f) — pola numeryczne obok suwaków, zakresy 180 m / 360 m / 12 naw, `commit(typed) = clamp(typed, min, max)`, dwukierunkowa synchronizacja_
+    - _Preservation: 3.3 — przesunięcie suwaka nadal aktualizuje parametr i przelicza model po „Buduj Model 3D”_
+    - _Requirements: 2.8, 2.9_
+
+  - [ ] 3.8 `DockGridSelector.jsx` (wydzielony z `Controls.jsx`) — rodzaj otworu i zaznaczanie zakresem
+    - Lista `OPENING_TYPES` (`none` / `dock` / `gate`) na górze sekcji, stan `openingType` i `lastClickedIndex`
+    - Płaski indeks slotu `index = bayIdx * slotsPerBay + slotIdx`, klucz `side-bay-slot` odtwarzany z indeksu — zakres przechodzi przez granice przęseł
+    - Klik bez Shift: zapis `openingType` w slocie i `setLastClickedIndex({ side, index })`
+    - Klik z Shift po tej samej stronie: zapis w slotach `min..max`, potem aktualizacja `lastClickedIndex`; Shift bez zapamiętanego indeksu lub po innej stronie działa jak klik pojedynczy
+    - `openingType === 'none'` usuwa klucze z `docks_config` (konwencja „brak klucza = brak otworu”)
+    - Reset `lastClickedIndex` w `useEffect` na zmianę `numBays` / `slotsPerBay`
+    - Aktualizacja niemutowalna: `setParams(prev => ({ ...prev, docks_config: { ...prev.docks_config, ...patch } }))`
+    - **Świadoma zmiana zachowania z designu**: klik pojedynczy nie cykluje już `none → dock → gate`, lecz stosuje rodzaj z listy
+    - _Bug_Condition: C7 — `interaction IN ['pickOpeningTypeFromList','shiftRangeSelect'] AND NOT uiSupports(interaction)`_
+    - _Expected_Behavior: Property 1 (f) — `shiftClick(i, j)` ustawia dokładnie sloty `[min(i,j)..max(i,j)]` na `openingType`_
+    - _Preservation: 3.4 — „Max Doki L/R” i „Czyść L/R” bez zmian, klik pojedynczy dotyczy jednego slotu_
+    - _Requirements: 2.10_
+
+  - [ ] 3.9 Obudowa pionowa — backend (`CladdingFactory`, `models.py`, `defaults.py`) i UI (`Controls.jsx`, `App.jsx`, `Scene3D.jsx`)
+    - `models.py`: `cladding_orientation: str = "horizontal"`, `cladding_module_width: float = 1.1`
+    - `defaults.py`: `cladding_rail_spacing = 1.8`, `cladding_rail_section = 0.10`
+    - `_build_vertical_field(...)`: podział pola wzdłuż Z na pasma rozdzielone krawędziami otworu (żadna płyta nie przechodzi przez krawędź), każde pasmo na `n = max(1, round(width / module_w))` płyt o równej szerokości `width / n`; w pasmie otworu części nad nadprożem i pod otworem gdy `hole_y_start > 0`; typ `sandwich_panel_v`
+    - `_build_cladding_rails(...)`: rzędne od `plinth_top_level + rail_spacing` co `cladding_rail_spacing` do `get_wall_top_height()`, plus rygiel krawędziowy na górze ściany; poziom bez otworów → jeden element na przęsło, przęsło z otworem → elementy per slot pomijające sloty w wysokości otworu; typ `cladding_rail`, przekrój `cladding_rail_section`; dla szczytów rzędne przycięte do `get_gable_wall_top_at(x)`
+    - `Controls.jsx`: select `cladding_orientation` (`horizontal` / `vertical`) w sekcji ścian zewnętrznych + informacja o szerokości modularnej wybranej płyty
+    - `App.jsx`: stan początkowy z nowymi kategoriami, `cladding_orientation: 'horizontal'`, `cladding_module_width: 1.1`; `handlePanelChange` ustawia `cladding_module_width: RUUKKI_CATALOG[panelId].modularWidth / 1000`
+    - `Scene3D.getCategory`: reguła `if (type.includes('cladding_rail')) return 'structure';` **przed** regułą `sandwich_panel` (inaczej rygle wpadają do `other` i nie renderują się); materiał `cladding_rail` w kolorze `#64748b`
+    - _Bug_Condition: C7 — `interaction = 'setVerticalCladding' AND NOT uiSupports(interaction)`; C1 — nowy select tekstowy przechodzi przez naprawiony `handleChange`_
+    - _Expected_Behavior: Property 1 (f) — pionowe płyty o szerokości modularnej i poziome rygle montażowe z uwzględnieniem otworów; suma szerokości płyt w polu = szerokość pola minus otwory, każda płyta ≤ `module_width` i > 0_
+    - _Preservation: 3.5, 3.8 — ścieżka `horizontal` bez zmian; kontrakt `Component3D` i mapowanie typów w `Scene3D` zachowane_
+    - _Requirements: 2.12_
+
+  - [ ] 3.10 `Controls.jsx` — nazwy sekcji, lista kategorii i niemutowalna edycja gabarytów
+    - „4. Obudowa Ruukki” → „ŚCIANY ZEWNĘTRZNE”, „5. Konstrukcja i Fundamenty” → „KONSTRUKCJA”; numeracja pozostałych sekcji nietknięta (renumeracja zwiększałaby ryzyko regresji w 3.9)
+    - Formularz ręcznych gabarytów renderowany ze stałej listy `COLUMN_CATEGORIES` (cztery kategorie z etykietami), nie z `Object.keys(params...)`
+    - `updateManualValue(field, category, index, raw)`: nowa tablica przez `map`, nowy słownik, nowy obiekt stanu; `NaN` nie nadpisuje wartości
+    - Pole trzyma własny `draft` (jak w `NumberSlider`), aby wpisywanie „0.” nie kasowało znaku
+    - _Bug_Condition: C6 — `stateUpdate mutates params.manual_sizes[category]`; C4 — martwe kategorie w formularzu_
+    - _Expected_Behavior: Property 1 (e) — poprzedni obiekt stanu, jego słowniki i tablice nietknięte, nowa wartość natychmiast widoczna w polu, `after[category] !== before[category]`_
+    - _Preservation: 3.9 — sekcje 6–10 i ich handlery inline bez zmian_
+    - _Requirements: 2.5, 2.7, 2.11_
+
+  - [ ] 3.11 Sprawdzenie naprawy — testy eksploracyjne warunku błędu przechodzą
+    - **Property 1: Expected Behavior** - Poprawne przekazanie typów pól i geometria zgodna z konstrukcją
+    - **WAŻNE**: uruchom TE SAME testy z zadania 1 — NIE pisz nowych testów
+    - Testy z zadania 1 kodują oczekiwane zachowanie; ich przejście potwierdza spełnienie Property 1
+    - Rozszerzyć property-based do pełnej domeny z designu: `width ∈ [10,180]`, `length ∈ [10,360]`, `roof_angle ∈ [2,35]`, `aisles ∈ [1,12]`, `module_width ∈ [0.6,1.5]`, losowe `docks_config`
+    - Asercje fix checking per podwarunek: C1 typ `string` i równość wartości; C2 znaki nachyleń `+1`/`-1` i kalenica = `get_roof_height_at(0)` z tolerancją `t/(2·cos)`; C3 `maxWallTopY ≤ get_eave_height() + eps` i `gableTopY(x) ≥ get_roof_height_at(x) - eps`; C4/C5 kategoria każdego węzła = `expectedCategory(axis_index, frame_index)` i liczba `external_corner` = 4 dla `hall_type='simple'`; C6 deep-freeze poprzedniego stanu; C7 `commit(typed) = clamp(typed, min, max)` i zakres Shift = `[min..max]`
+    - Testy integracyjne: `POST /generate-hall` z `gravity` + `manual`/`manual` → 200 i wpisane gabaryty; `cladding_orientation='vertical'` → obecność `sandwich_panel_v` i `cladding_rail`, brak `girt`; przełączanie `gravity` ↔ `vacuum` ↔ `gravity` bez 422; hala 150 × 300 m z 8 nawami; „Brama kurierska” + Shift+klik → 8 bram w `docks_config`; tryb `complex` z dwoma blokami
+    - **OCZEKIWANY WYNIK**: testy PRZECHODZĄ (potwierdza naprawę błędu)
+    - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8, 2.9, 2.10, 2.11, 2.12_
+
+  - [ ] 3.12 Sprawdzenie zachowania — testy preservation nadal przechodzą
+    - **Property 2: Preservation** - Niezmienione zachowanie dla wejść poza warunkiem błędu
+    - **WAŻNE**: uruchom TE SAME testy z zadania 2 — NIE pisz nowych testów
+    - Porównanie ze snapshotami i modułem referencyjnym z zadania 0: lista komponentów posortowana po `(type, position, scale)` identyczna z dokładnością 1e-9
+    - Uruchamiać po każdym z zadań 3.1–3.10, nie tylko na końcu — regresję łatwiej przypisać do konkretnej zmiany
+    - **OCZEKIWANY WYNIK**: testy PRZECHODZĄ (brak regresji)
+    - Potwierdzić, że wszystkie testy nadal przechodzą po naprawie
+    - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8, 3.9, 3.10, 3.11_
+
+- [ ] 4. Checkpoint - Ensure all tests pass
+  - Uruchomić `pytest` w `backend/` i `npm run test` w `frontend/` — pełny zestaw: eksploracyjne (teraz przechodzą), fix checking, preservation, jednostkowe, własnościowe, integracyjne
+  - Testy jednostkowe z designu: `handleChange` (trzy klasy pól, puste pole `number`, pole całkowitoliczbowe), `GridSystem3D` (cztery metody wysokościowe, `is_corner_node` dla 1/2/4 naw, `get_column_category`), `RoofFactory` (znaki rotacji, brak zmian w `vacuum`), `CladdingFactory` (wysokość ścian, schodkowe szczyty, podział modularny, rzędne rygli), resolvery kategorii (klucz nowy / alias / fallback), `NumberSlider`, `DockGridSelector`, `updateManualValue`
+  - Ensure all tests pass, ask the user if questions arise.

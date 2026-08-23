@@ -32,6 +32,11 @@ class SecondaryStructureFactory:
         # 3. WYMIANY WOKÓŁ OTWORÓW
         elements.extend(SecondaryStructureFactory._generate_trimmers(grid, params))
 
+
+        # 4. RYGLE MONTAŻOWE DLA PIONOWEJ ORIENTACJI OBUDOWY
+        if params.cladding_orientation == "vertical":
+            elements.extend(SecondaryStructureFactory._generate_cladding_rails(grid, params))
+
         return elements
 
     @staticmethod
@@ -150,5 +155,43 @@ class SecondaryStructureFactory:
                             scale=[t, t, grid.slot_width]
                         ))
                         y += SecondaryStructureFactory.GIRT_SPACING
+
+        return elements
+
+    @staticmethod
+    def _generate_cladding_rails(grid: GridSystem3D, params: HallParameters) -> list[Component3D]:
+        """Generuje poziome rygle montażowe dla pionowego układu płyt warstwowych."""
+        elements = []
+        rail_spacing = 1.8
+        rail_t = 0.08
+        wall_top = grid.get_parapet_height()
+
+        for side in ["left", "right"]:
+            x_pos = -grid.half_width if side == "left" else grid.half_width
+            y = params.plinth_top_level + rail_spacing
+            while y < wall_top - 0.3:
+                for bay_idx in range(grid.num_bays):
+                    z1 = grid.axes_z[bay_idx]
+                    z2 = grid.axes_z[bay_idx + 1]
+                    bay_len = z2 - z1
+                    z_center = (z1 + z2) / 2
+                    elements.append(Component3D(
+                        type="cladding_rail",
+                        position=[x_pos, y, z_center],
+                        rotation=[0, 0, 0],
+                        scale=[rail_t, rail_t, bay_len]
+                    ))
+                y += rail_spacing
+
+        for z_pos in [grid.axes_z[0], grid.axes_z[-1]]:
+            y = params.plinth_top_level + rail_spacing
+            while y < wall_top - 0.3:
+                elements.append(Component3D(
+                    type="cladding_rail",
+                    position=[0, y, z_pos],
+                    rotation=[0, 0, 0],
+                    scale=[grid.width, rail_t, rail_t]
+                ))
+                y += rail_spacing
 
         return elements

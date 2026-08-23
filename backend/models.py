@@ -156,17 +156,15 @@ class HallParameters(BaseModel):
     docks_config: Dict[str, str] = {}
 
     manual_sizes: Dict[str, List[float]] = {
-        "external_main": [2.5, 4.0, 0.45], "internal_main": [2.5, 2.5, 0.45],
-        "intermediate_cladding": [1.5, 1.5, 0.40], "external_dock": [2.7, 3.5, 0.45],
-        "internal_dock": [2.5, 3.7, 0.45]
+        "external_main": [2.5, 4.0, 0.45], "external_corner": [2.5, 4.0, 0.45],
+        "external_intermediate_cladding": [1.5, 1.5, 0.40], "internal_main": [2.5, 2.5, 0.45]
     }
 
     # Słupy i Podwaliny
     column_method: str = "default"
     manual_column_sections: Dict[str, List[float]] = {
-        "external_main": [0.4, 0.4], "internal_main": [0.4, 0.4],
-        "intermediate_cladding": [0.3, 0.3], "external_dock": [0.5, 0.5],
-        "internal_dock": [0.5, 0.5]
+        "external_main": [0.4, 0.4], "external_corner": [0.4, 0.4],
+        "external_intermediate_cladding": [0.3, 0.3], "internal_main": [0.4, 0.4]
     }
     plinth_thickness: float = 0.24
     plinth_top_level: float = 0.30
