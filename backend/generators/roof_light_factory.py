@@ -41,8 +41,43 @@ class RoofLightFactory:
         elements = []
         if not params.roof_lights:
             return elements
+        dock_enabled = getattr(params, "dock_zone_enabled", False)
+        dock_side = getattr(params, "dock_zone_side", "left")
         for zone_config in params.roof_lights:
-            elements.extend(RoofLightFactory._generate_zone(grid, params, zone_config))
+            # Gdy strefa dokowa z obu stron -> dzielimy elementy na pol
+            # i generujemy osobno dla lewej i prawej strefy dokowej
+            if (zone_config.zone_id == "dock_zone"
+                    and dock_enabled and dock_side == "both"):
+                from copy import deepcopy
+                items = zone_config.items or []
+                left_items, right_items = [], []
+                for it in items:
+                    qty = max(1, it.quantity)
+                    qty_left = qty // 2 + qty % 2
+                    qty_right = qty - qty_left
+                    if qty_left > 0:
+                        it_l = deepcopy(it)
+                        it_l.quantity = qty_left
+                        it_l.item_id = it.item_id + "_L"
+                        left_items.append(it_l)
+                    if qty_right > 0:
+                        it_r = deepcopy(it)
+                        it_r.quantity = qty_right
+                        it_r.item_id = it.item_id + "_R"
+                        right_items.append(it_r)
+                if left_items:
+                    left_cfg = RoofLightZoneConfig(
+                        zone_id="dock_zone_left", items=left_items)
+                    elements.extend(
+                        RoofLightFactory._generate_zone(grid, params, left_cfg))
+                if right_items:
+                    right_cfg = RoofLightZoneConfig(
+                        zone_id="dock_zone_right", items=right_items)
+                    elements.extend(
+                        RoofLightFactory._generate_zone(grid, params, right_cfg))
+            else:
+                elements.extend(
+                    RoofLightFactory._generate_zone(grid, params, zone_config))
         return elements
 
     # ---------------- GRANICE STREFY ----------------
@@ -57,7 +92,16 @@ class RoofLightFactory:
         if zone_id == "dock_zone" and dock_enabled:
             if dock_side == "right":
                 return (grid.half_width - dock_w, grid.half_width, z_min, z_max)
+            if dock_side == "both":
+                # Fallback: cala lewa strona (nie powinno byc wywolywane przy both)
+                return (-grid.half_width, -grid.half_width + dock_w, z_min, z_max)
             return (-grid.half_width, -grid.half_width + dock_w, z_min, z_max)
+
+        if zone_id == "dock_zone_left" and dock_enabled:
+            return (-grid.half_width, -grid.half_width + dock_w, z_min, z_max)
+
+        if zone_id == "dock_zone_right" and dock_enabled:
+            return (grid.half_width - dock_w, grid.half_width, z_min, z_max)
 
         if dock_enabled:
             if dock_side == "left":
