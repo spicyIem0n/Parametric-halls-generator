@@ -110,25 +110,33 @@ class GridSystem3D:
 
     def _compute_gable_xs(self) -> List[float]:
         """
-        Oblicza pozycje X słupów szczytowych (wiatrowych).
-        Rozstaw co ~6m, pomijając osie słupów wewnętrznych ramy.
+        Oblicza pozycje X slupow szczytowych (wiatrowych).
+        Przy wiecej niz 1 nawie: kazda nawa dzielona na rowne czesci,
+        tak aby zadna czesc nie przekraczala ~6m.
+        Przy 1 nawie: rozstaw co ~6m.
+        Pomija osie slupow wewnetrznych ramy (bo tam stoja juz slupy glowne).
         """
         gable_xs = []
-        curr_x = -self.half_width + DEFAULTS.gable_column_spacing
-        while curr_x < self.half_width - 0.1:
-            # Pomijamy osie słupów wewnętrznych ramy
-            if self.params.number_of_aisles > 1:
-                aisle_width = self.width / self.params.number_of_aisles
-                is_on_axis = any(
-                    abs(curr_x - (-self.half_width + j * aisle_width)) < 0.1
-                    for j in range(1, self.params.number_of_aisles)
-                )
-                if not is_on_axis:
-                    gable_xs.append(curr_x)
-            else:
-                gable_xs.append(curr_x)
-            curr_x += DEFAULTS.gable_column_spacing
-        return gable_xs
+        spacing = DEFAULTS.gable_column_spacing
+
+        # Wyznacz granice naw (osie slupow glownych w poprzek)
+        aisle_boundaries = list(self.axes_x)  # [-half_width, ..., half_width]
+
+        # Dla kazdej nawy (odcinek miedzy kolejnymi osiami glownymi)
+        for seg_idx in range(len(aisle_boundaries) - 1):
+            x_start = aisle_boundaries[seg_idx]
+            x_end = aisle_boundaries[seg_idx + 1]
+            seg_width = x_end - x_start
+
+            # Ile rownych podziałow potrzeba, zeby kazdy odcinek <= spacing
+            num_divisions = max(1, math.ceil(seg_width / spacing))
+
+            # Wstawiamy slupy posrednie (bez granic - te to slupy glowne)
+            for k in range(1, num_divisions):
+                x_pos = x_start + k * (seg_width / num_divisions)
+                gable_xs.append(round(x_pos, 6))
+
+        return sorted(gable_xs)
 
     def _compute_z_levels(self) -> Dict[str, float]:
         """Oblicza kluczowe płaszczyzny wysokościowe."""

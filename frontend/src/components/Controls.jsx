@@ -121,7 +121,7 @@ const DockGridSelector = ({ params, setParams }) => {
 };
 
 
-const Controls = ({ params, setParams, onGenerate, isLoading, onPanelChange, catalog, validation }) => {
+const Controls = ({ params, setParams, onGenerate, isLoading, onPanelChange, catalog, roofSheetCatalog, validation }) => {
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
     const STRING_FIELDS = new Set(["roof_drainage_type", "column_method", "foundation_method", "floor_base_type", "cladding_orientation", "cladding_panel_id", "hall_type"]);
@@ -162,7 +162,7 @@ const Controls = ({ params, setParams, onGenerate, isLoading, onPanelChange, cat
               ].map(f => (
                 <div key={f.name} className="flex flex-col">
                   <div className="flex justify-between text-[10px] font-bold text-gray-500 uppercase">
-                    <input type="number" name={f.name} min={f.min} max={f.max} step={f.step} value={params[f.name]} onChange={handleChange} className="w-14 text-right text-blue-600 font-bold bg-transparent border-b border-blue-200 focus:outline-none text-[10px]" />
+                    <label>{f.label}</label><input type="number" name={f.name} min={f.min} max={f.max} step={f.step} value={params[f.name]} onChange={handleChange} className="w-14 text-right text-blue-600 font-bold bg-transparent border-b border-blue-200 focus:outline-none text-[10px]" />
                   </div>
                   <input type="range" {...f} value={params[f.name]} onChange={handleChange} className="w-full h-1 bg-gray-200 rounded accent-blue-600" />
                 </div>
@@ -187,6 +187,29 @@ const Controls = ({ params, setParams, onGenerate, isLoading, onPanelChange, cat
               <div className="flex flex-col border-t pt-2 mt-2">
                 <div className="flex justify-between text-[10px] font-bold text-gray-500 uppercase"><label>Max. rozstaw płatwi [m]</label> <span className="text-blue-600">{params.purlin_spacing}</span></div>
                 <input type="range" name="purlin_spacing" min="1" max="4" step="0.5" value={params.purlin_spacing} onChange={handleChange} className="w-full h-1 bg-gray-200 rounded" />
+              <div className="flex flex-col border-t pt-2 mt-2">
+                <span className="text-[10px] font-bold text-gray-500 uppercase mb-1">Blacha trapezowa dachowa</span>
+                {roofSheetCatalog && (
+                  <select name="roof_sheet_id" value={params.roof_sheet_id || "T85_08"} onChange={(e) => {
+                    const sheet = roofSheetCatalog[e.target.value];
+                    setParams(prev => ({ ...prev, roof_sheet_id: e.target.value, roof_sheet_height: sheet.height / 1000 }));
+                  }} className="w-full p-2 border rounded text-[10px] font-bold bg-gray-50">
+                    {Object.entries(roofSheetCatalog || {}).map(([id, sheet]) => (
+                      <option key={id} value={id}>{sheet.name} (h={sheet.height}mm, gr={sheet.thickness}mm, rozp. do {sheet.span}m)</option>
+                    ))}
+                  </select>
+                )}
+              </div>
+              <div className="flex flex-col border-t pt-2 mt-2">
+                <div className="flex justify-between text-[10px] font-bold text-gray-500 uppercase">
+                  <label>Wys. konstrukcji dachu [m]</label>
+                  <input type="number" name="truss_depth" min="0.3" max="2.5" step="0.1" value={params.truss_depth} onChange={handleChange} className="w-14 text-right text-blue-600 font-bold bg-transparent border-b border-blue-200 focus:outline-none text-[10px]" />
+                </div>
+                <input type="range" name="truss_depth" min="0.3" max="2.5" step="0.1" value={params.truss_depth} onChange={handleChange} className="w-full h-1 bg-gray-200 rounded accent-blue-600" />
+                <div className="mt-1 text-[9px] text-gray-400">
+                  Najwy\u017cszy pkt dachu (g\u00f3rna fa\u0142da blachy): <span className="text-blue-600 font-bold">{(parseFloat(params.clear_height || 0) + parseFloat(params.truss_depth || 0) + parseFloat(params.roof_sheet_height || 0.085)).toFixed(2)} m</span>
+                </div>
+              </div>
               </div>
             </div>
           </CollapsibleSection>

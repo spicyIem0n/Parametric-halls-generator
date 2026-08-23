@@ -13,6 +13,16 @@ export const RUUKKI_CATALOG = {
   "nSPB_WE_150": { name: "nSPB WE", core: "Wełna Mineralna", thickness: 150, uValue: 0.26, fire: "EI 120", modularWidth: 1100, img: "standard_wool" }
 };
 
+// Katalog blach trapezowych dachowych (na podstawie oferty Pruszyński)
+export const ROOF_SHEET_CATALOG = {
+  "T55_07": { name: "T55", thickness: 0.7, height: 55, span: 3.0, weight: 7.6, desc: "Blacha nośna lekka" },
+  "T85_08": { name: "T85", thickness: 0.8, height: 85, span: 5.0, weight: 9.2, desc: "Blacha nośna średnia" },
+  "T100_088": { name: "T100", thickness: 0.88, height: 100, span: 6.0, weight: 10.8, desc: "Blacha nośna ciężka" },
+  "T130_10": { name: "T130", thickness: 1.0, height: 130, span: 7.5, weight: 13.4, desc: "Blacha nośna wzmocniona" },
+  "T150_10": { name: "T150", thickness: 1.0, height: 150, span: 9.0, weight: 14.8, desc: "Blacha nośna max rozpiętość" },
+  "T160_125": { name: "T160", thickness: 1.25, height: 160, span: 10.0, weight: 17.2, desc: "Blacha nośna przemysłowa" },
+};
+
 const App = () => {
   //... (Górna część i baza Ruukki pozostają bez zmian) ...
   const [params, setParams] = useState({
@@ -25,6 +35,7 @@ const App = () => {
     manual_column_sections: { external_main: [0.4, 0.4], external_corner: [0.4, 0.4], external_intermediate_cladding: [0.3, 0.3], internal_main: [0.4, 0.4] },
     has_cladding: true, cladding_orientation: 'horizontal', cladding_panel_id: 'SP2B_E_PIR_100', cladding_thickness: 0.1, cladding_bottom_level: 0.25,
     plinth_thickness: 0.24, plinth_top_level: 0.30, purlin_spacing: 2.0, roof_panel_thickness: 0.15, truss_depth: 0.8,
+    roof_sheet_id: "T85_08", roof_sheet_height: 0.085,
     // NOWE: Parametry odwodnienia
     roof_drainage_type: 'vacuum', drainage_zones_x: 2, drainage_zones_z: 3, roof_slope_percent: 2.0,
     // NOWE: Wielobryłowość
@@ -62,7 +73,7 @@ const App = () => {
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-gray-100 font-sans">
-      <Controls params={params} setParams={setParams} onGenerate={handleGenerate} isLoading={isLoading} onPanelChange={handlePanelChange} catalog={RUUKKI_CATALOG} validation={validation} />
+      <Controls params={params} setParams={setParams} onGenerate={handleGenerate} isLoading={isLoading} onPanelChange={handlePanelChange} catalog={RUUKKI_CATALOG} roofSheetCatalog={ROOF_SHEET_CATALOG} validation={validation} />
       <Scene3D components={components} />
     </div>
   );
