@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 from enum import Enum
 
 
@@ -64,9 +64,28 @@ class BlockDefinition(BaseModel):
     roof_angle: float = 5.0
     roof_drainage_type: str = "gravity"
     number_of_aisles: int = 1
-    position_offset: List[float] = [0.0, 0.0, 0.0]  # [x, y, z] offset od globalnego 0
-    rotation_y: float = 0.0
+    position_offset: List[float] = [0.0, 0.0, 0.0]  # [x, y, z] offset (legacy)
+    rotation_y: float = 0.0  # legacy
     connection_type: str = "expansion_joint"  # "expansion_joint" | "fire_wall" | "merged"
+    # Nowe pola - edytor modulowy
+    position_x: float = 0.0
+    position_z: float = 0.0
+    frame_orientation: int = 0  # 0 = ramy wzdluz szerokosci, 90 = ramy wzdluz dlugosci
+    # Pola opcjonalne - pełna konfiguracja per moduł (jak w Simple)
+    dock_zone_enabled: bool = False
+    dock_zone_side: str = "left"
+    dock_zone_width: float = 12.0
+    dock_zone_aisles: int = 1
+    docks_config: Dict[str, str] = {}
+    has_cladding: bool = True
+    cladding_orientation: str = "horizontal"
+    cladding_panel_id: str = "SP2B_E_PIR_100"
+    truss_depth: float = 0.6
+    purlin_spacing: float = 2.0
+    roof_sheet_id: str = "T85_08"
+    roof_lights: Optional[List[Any]] = None  # None = uzyj globalnych, [] = puste
+    fire_walls: List[Any] = []
+    bracing_config: Optional[Dict[str, Any]] = None
 
 
 class BracingConfig(BaseModel):
@@ -219,6 +238,7 @@ class HallParameters(BaseModel):
 
     # --- NOWE: Wielobryłowość (tryb complex) ---
     blocks: List[BlockDefinition] = []
+    module_connections: List[Dict[str, Any]] = []  # Polaczenia miedzy modulami
 
     # --- NOWE: Pomieszczenia techniczne ---
     technical_rooms: List[TechnicalRoomConfig] = []

@@ -48,6 +48,7 @@ const App = () => {
     // NOWE: Pomieszczenia i biura
     technical_rooms: [], external_offices: [], internal_offices: [], office_reserve_zones: [],
     roof_lights: [],
+    module_connections: [],
   });
 //... (Reszta App.jsx bez zmian) ...
 
@@ -63,10 +64,14 @@ const App = () => {
 
   const handleGenerate = async () => {
     setIsLoading(true);
-    const data = await generateHallParameters(params);
+    // Strip internal UI-only fields (prefixed with _) before sending to API
+    const apiParams = Object.fromEntries(
+      Object.entries(params).filter(([key]) => !key.startsWith('_'))
+    );
+    const data = await generateHallParameters(apiParams);
     if (data && data.components) setComponents(data.components);
     // Walidacja modelu
-    const validationResult = await validateHall(params);
+    const validationResult = await validateHall(apiParams);
     setValidation(validationResult);
     setIsLoading(false);
   };

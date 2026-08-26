@@ -104,18 +104,29 @@ class HallGenerator:
             block_components.extend(ExternalOfficeFactory.generate(grid, block_params))
             block_components.extend(InternalOfficeFactory.generate(grid, block_params))
             block_components.extend(ReserveZoneFactory.generate(grid, block_params))
+            block_components.extend(RoofLightFactory.generate(grid, block_params))
 
             # Aplikuj PPOŻ per blok
             block_components = self._apply_fire_safety(block_components, grid)
 
-            # Transformacja: offset + rotacja
+            # Transformacja: offset (bez rotacji!)
+            # Orientacja ram jest realizowana przez zamiane width/length w _block_to_params,
+            # nie przez obracanie gotowych komponentow - to pozwala uniknac bledow
+            # geometrycznych w generatorach (dach, obudowa, platwie itd.)
+            offset = block.position_offset
+            if block.position_x != 0.0 or block.position_z != 0.0 or block.frame_orientation != 0:
+                offset = [block.position_x, 0.0, block.position_z]
             transformed = self._transform_components(
                 block_components,
-                offset=block.position_offset,
-                rotation_y=block.rotation_y,
+                offset=offset,
+                rotation_y=0.0,  # Nigdy nie obracamy - orientacja przez zamiane wymiarow
                 block_id=block.block_id
             )
             all_components.extend(transformed)
+
+        # Post-processing: usun sciany wewnetrzne na stykach dylatacji/scalenia
+        # oraz generuj attyki przy roznych wysokosciach
+        all_components = self._process_connections(all_components)
 
         return all_components
 
@@ -129,20 +140,42 @@ class HallGenerator:
         base_dict = self.params.model_dump()
 
         # Nadpisujemy geometrię z bloku
+        # Gdy frame_orientation == 90, zamieniamy width <-> length.
+        # Dzieki temu ramy (dzwigary) generuja sie wzdluz "nowej szerokosci",
+        # co odpowiada obroceniu kierunku konstrukcji o 90 stopni.
+        w = block.width
+        l = block.length
+        if block.frame_orientation == 90:
+            w, l = l, w
+
         base_dict.update({
             "hall_type": "simple",  # Wewnętrznie generujemy jako simple
-            "width": block.width,
-            "length": block.length,
+            "width": w,
+            "length": l,
             "clear_height": block.clear_height,
             "bay_spacing": block.bay_spacing,
             "roof_angle": block.roof_angle,
             "roof_drainage_type": block.roof_drainage_type,
             "number_of_aisles": block.number_of_aisles,
-            # Bloki nie mają doków domyślnie (mogą być dodane osobno)
-            "docks_config": {},
+            # Strefa dokowa per modul
+            "dock_zone_enabled": block.dock_zone_enabled,
+            "dock_zone_side": block.dock_zone_side,
+            "dock_zone_width": block.dock_zone_width,
+            "dock_zone_aisles": block.dock_zone_aisles,
+            "docks_config": block.docks_config or {},
+            # Obudowa per modul
+            "has_cladding": block.has_cladding,
+            "cladding_orientation": block.cladding_orientation,
+            "cladding_panel_id": block.cladding_panel_id,
+            # Dach per modul
+            "truss_depth": block.truss_depth,
+            "purlin_spacing": block.purlin_spacing,
+            "roof_sheet_id": block.roof_sheet_id,
+            # Doswietlenie - jesli block ma wlasne, uzyj ich; inaczej puste
+            "roof_lights": block.roof_lights if block.roof_lights is not None else [],
             # Czyścimy zagnieżdżone konfiguracje
             "blocks": [],
-            "fire_walls": [],
+            "fire_walls": block.fire_walls or [],
             "technical_rooms": [],
             "external_offices": [],
             "internal_offices": [],
@@ -208,6 +241,162 @@ class HallGenerator:
             ))
 
         return transformed
+
+    def _process_connections(self, components: list[Component3D]) -> list[Component3D]:
+        """
+        Przetwarza polaczenia miedzy modulami:
+        - expansion_joint: usuwa sciany (sandwich_panel, plinth) na linii styku wewnatrz,
+          zachowuje/dodaje attyk? przy roznicy wysokosci
+        - none: usuwa sciany na linii styku
+        - internal_wall: zachowuje sciany bez odpornosci ogniowej
+        - fire_wall: zachowuje sciany, dodaje nadwyzke ponad dach
+        """
+        connections = self.params.module_connections or []
+        blocks = self.params.blocks or []
+        if not connections or not blocks:
+            return components
+
+        # Oblicz granice kazdego bloku
+        block_bounds = {}
+        for block in blocks:
+            w, l = block.width, block.length
+            if block.frame_orientation == 90:
+                w, l = l, w
+            px = block.position_x if (block.position_x != 0 or block.position_z != 0
+                                      or block.frame_orientation != 0) else block.position_offset[0]
+            pz = block.position_z if (block.position_x != 0 or block.position_z != 0
+                                      or block.frame_orientation != 0) else block.position_offset[2]
+            block_bounds[block.block_id] = {
+                'x_min': px - w / 2, 'x_max': px + w / 2,
+                'z_min': pz - l / 2, 'z_max': pz + l / 2,
+                'height': block.clear_height, 'px': px, 'pz': pz,
+            }
+
+        # Okresl strefy usuwania scian
+        remove_zones = []  # lista (axis, coord, range_min, range_max, conn_type, h_a, h_b, bid_a, bid_b)
+        for conn in connections:
+            if not isinstance(conn, dict):
+                conn = conn if hasattr(conn, 'get') else {}
+            mod_a_idx = conn.get('moduleA', 0)
+            mod_b_idx = conn.get('moduleB', 1)
+            conn_type = conn.get('type', 'expansion_joint')
+
+            if mod_a_idx >= len(blocks) or mod_b_idx >= len(blocks):
+                continue
+            bid_a = blocks[mod_a_idx].block_id
+            bid_b = blocks[mod_b_idx].block_id
+            if bid_a not in block_bounds or bid_b not in block_bounds:
+                continue
+
+            ba = block_bounds[bid_a]
+            bb = block_bounds[bid_b]
+
+            # Usuwamy sciany tylko przy expansion_joint i none
+            if conn_type not in ('expansion_joint', 'none'):
+                continue
+
+            tolerance = 0.5
+            # Styk w osi X (prawa A = lewa B lub odwrotnie)
+            if abs(ba['x_max'] - bb['x_min']) < tolerance:
+                x_coord = ba['x_max']
+                z_min = max(ba['z_min'], bb['z_min'])
+                z_max = min(ba['z_max'], bb['z_max'])
+                if z_max > z_min:
+                    remove_zones.append(('x', x_coord, z_min, z_max, conn_type,
+                                         ba['height'], bb['height'], bid_a, bid_b))
+            elif abs(ba['x_min'] - bb['x_max']) < tolerance:
+                x_coord = ba['x_min']
+                z_min = max(ba['z_min'], bb['z_min'])
+                z_max = min(ba['z_max'], bb['z_max'])
+                if z_max > z_min:
+                    remove_zones.append(('x', x_coord, z_min, z_max, conn_type,
+                                         ba['height'], bb['height'], bid_a, bid_b))
+            # Styk w osi Z
+            if abs(ba['z_max'] - bb['z_min']) < tolerance:
+                z_coord = ba['z_max']
+                x_min = max(ba['x_min'], bb['x_min'])
+                x_max = min(ba['x_max'], bb['x_max'])
+                if x_max > x_min:
+                    remove_zones.append(('z', z_coord, x_min, x_max, conn_type,
+                                         ba['height'], bb['height'], bid_a, bid_b))
+            elif abs(ba['z_min'] - bb['z_max']) < tolerance:
+                z_coord = ba['z_min']
+                x_min = max(ba['x_min'], bb['x_min'])
+                x_max = min(ba['x_max'], bb['x_max'])
+                if x_max > x_min:
+                    remove_zones.append(('z', z_coord, x_min, x_max, conn_type,
+                                         ba['height'], bb['height'], bid_a, bid_b))
+
+        if not remove_zones:
+            return components
+
+        # Filtruj/przycinaj elementy scian na stykach
+        wall_types = {'sandwich_panel', 'plinth', 'girt'}
+        filtered = []
+        for c in components:
+            action = 'keep'
+            trim_y_min = None
+            if c.type in wall_types:
+                px, py, pz = c.position
+                sy = c.scale[1] if len(c.scale) > 1 else 1.0
+                panel_top = py + sy / 2
+                block_id = c.meta.get("block_id", "") if c.meta else ""
+
+                for zone in remove_zones:
+                    (axis, coord, rng_min, rng_max, ctype,
+                     h_a, h_b, bid_a, bid_b) = zone
+                    lower_h = min(h_a, h_b)
+                    higher_h = max(h_a, h_b)
+                    # Okresl czy panel nalezy do wyzszego czy nizszego modulu
+                    is_higher = ((block_id == bid_a and h_a >= h_b) or
+                                 (block_id == bid_b and h_b >= h_a))
+
+                    in_zone = False
+                    if axis == 'x':
+                        in_zone = (abs(px - coord) < 2.0 and
+                                   rng_min - 1 < pz < rng_max + 1)
+                    else:
+                        in_zone = (abs(pz - coord) < 2.0 and
+                                   rng_min - 1 < px < rng_max + 1)
+
+                    if in_zone and (block_id == bid_a or block_id == bid_b):
+                        if lower_h >= higher_h - 0.5:
+                            # Obie hale o tej samej wysokosci -> usun w calosci
+                            action = 'remove'
+                        elif is_higher:
+                            # Panel wyzszego modulu: przytnij do attyki (powyzej lower_h)
+                            if panel_top <= lower_h + 0.3:
+                                action = 'remove'
+                            else:
+                                action = 'trim'
+                                trim_y_min = lower_h
+                        else:
+                            # Panel nizszego modulu: usun w calosci
+                            action = 'remove'
+                        break
+
+            if action == 'remove':
+                continue
+            elif action == 'trim' and trim_y_min is not None:
+                sx, sy_orig, sz = c.scale
+                py_orig = c.position[1]
+                panel_top = py_orig + sy_orig / 2
+                new_sy = panel_top - trim_y_min
+                if new_sy < 0.3:
+                    continue
+                new_py = trim_y_min + new_sy / 2
+                trimmed = Component3D(
+                    type=c.type,
+                    position=[c.position[0], new_py, c.position[2]],
+                    rotation=c.rotation,
+                    scale=[sx, new_sy, sz],
+                    meta=c.meta,
+                )
+                filtered.append(trimmed)
+            else:
+                filtered.append(c)
+
+        return filtered
 
     def _apply_fire_safety(self, components: list[Component3D], grid: GridSystem3D) -> list[Component3D]:
         """

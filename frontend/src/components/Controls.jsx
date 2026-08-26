@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import ModuleLayoutEditor from './ModuleLayoutEditor';
 
 // --- KOMPONENT ZWIJANEJ SEKCJI ---
 const CollapsibleSection = ({ title, children, defaultOpen = false }) => {
@@ -922,94 +923,517 @@ const Controls = ({ params, setParams, onGenerate, isLoading, onPanelChange, cat
 
       {params.hall_type === 'complex' && (
         <div className="flex-1 overflow-y-auto pr-1 custom-scrollbar">
-          <CollapsibleSection title="Bloki (Bryły)" defaultOpen={true}>
-            <div className="flex flex-col gap-3">
+          <CollapsibleSection title="Moduły Hali" defaultOpen={true}>
+            <div className="flex flex-col gap-2">
               <button onClick={() => {
+                const idx = (params.blocks || []).length + 1;
                 const newBlock = {
-                  block_id: `Block_${(params.blocks || []).length + 1}`,
+                  block_id: `Moduł_${idx}`,
                   width: 30, length: 60, clear_height: 10, bay_spacing: 6,
                   roof_angle: 3, roof_drainage_type: 'gravity', number_of_aisles: 1,
-                  position_offset: [0, 0, 0], rotation_y: 0, connection_type: 'expansion_joint'
+                  frame_orientation: 0,
+                  position_x: (idx - 1) * 35, position_z: 0,
                 };
                 setParams(prev => ({...prev, blocks: [...(prev.blocks || []), newBlock]}));
               }} className="w-full py-2 bg-green-50 text-green-700 text-[10px] font-bold rounded border border-green-200 hover:bg-green-100">
-                + Dodaj Blok
+                + Dodaj Moduł
               </button>
 
-              {(params.blocks || []).map((block, idx) => (
-                <div key={idx} className="bg-gray-50 p-2 rounded border border-gray-200">
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-[10px] font-black text-blue-800 uppercase">{block.block_id}</span>
-                    <button onClick={() => {
+              {(params.blocks || []).map((block, idx) => {
+                const isSelected = block.block_id === params._selectedModuleId;
+                return (
+                <div key={block.block_id} className={`p-2 rounded border ${isSelected ? 'border-blue-400 bg-blue-50' : 'border-gray-200 bg-gray-50'}`}
+                  onClick={() => setParams(prev => ({...prev, _selectedModuleId: block.block_id}))}>
+                  <div className="flex justify-between items-center mb-1">
+                    <input type="text" value={block.block_id}
+                      onChange={(e) => {
+                        const newBlocks = [...params.blocks];
+                        newBlocks[idx] = {...newBlocks[idx], block_id: e.target.value};
+                        setParams(prev => ({...prev, blocks: newBlocks}));
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                      className="text-[10px] font-black text-blue-800 uppercase bg-transparent border-b border-transparent hover:border-gray-300 focus:border-blue-400 outline-none w-24" />
+                    <button onClick={(e) => {
+                      e.stopPropagation();
                       const newBlocks = [...params.blocks];
                       newBlocks.splice(idx, 1);
                       setParams(prev => ({...prev, blocks: newBlocks}));
-                    }} className="text-[8px] bg-red-50 text-red-600 px-2 py-1 rounded hover:bg-red-100">Usuń</button>
+                    }} className="text-[8px] bg-red-50 text-red-600 px-2 py-0.5 rounded hover:bg-red-100">✕</button>
                   </div>
-                  
+
                   {[
-                    {key: 'width', label: 'Szer. [m]', min: 10, max: 180, step: 1},
-                    {key: 'length', label: 'Dł. [m]', min: 10, max: 360, step: 1},
-                    {key: 'clear_height', label: 'Wys. [m]', min: 4, max: 18, step: 0.5},
-                    {key: 'bay_spacing', label: 'Rozstaw [m]', min: 4, max: 12, step: 0.5},
+                    {key: 'width', label: 'Szer.', min: 10, max: 180, step: 1, unit: 'm'},
+                    {key: 'length', label: 'Dł.', min: 10, max: 360, step: 1, unit: 'm'},
+                    {key: 'clear_height', label: 'Wys.', min: 4, max: 18, step: 0.5, unit: 'm'},
+                    {key: 'bay_spacing', label: 'Rozstaw', min: 4, max: 12, step: 0.5, unit: 'm'},
+                    {key: 'number_of_aisles', label: 'Nawy', min: 1, max: 6, step: 1, unit: ''},
+                    {key: 'roof_angle', label: 'Kąt dachu', min: 1, max: 15, step: 0.5, unit: '°'},
                   ].map(f => (
-                    <div key={f.key} className="flex items-center gap-2 mb-1">
-                      <span className="text-[8px] font-bold text-gray-500 uppercase w-16">{f.label}</span>
-                      <input type="range" min={f.min} max={f.max} step={f.step} value={block[f.key]}
+                    <div key={f.key} className="flex items-center gap-1 mb-0.5">
+                      <span className="text-[7px] font-bold text-gray-500 uppercase w-12 truncate">{f.label}</span>
+                      <input type="range" min={f.min} max={f.max} step={f.step} value={block[f.key] || f.min}
+                        onClick={(e) => e.stopPropagation()}
                         onChange={(e) => {
                           const newBlocks = [...params.blocks];
-                          newBlocks[idx] = {...newBlocks[idx], [f.key]: parseFloat(e.target.value)};
+                          const val = f.key === 'number_of_aisles' ? parseInt(e.target.value) : parseFloat(e.target.value);
+                          newBlocks[idx] = {...newBlocks[idx], [f.key]: val};
                           setParams(prev => ({...prev, blocks: newBlocks}));
                         }} className="flex-1 h-1 bg-gray-200 rounded accent-blue-600" />
-                      <span className="text-[9px] font-mono text-blue-600 w-8 text-right">{block[f.key]}</span>
+                      <span className="text-[8px] font-mono text-blue-600 w-10 text-right">{block[f.key] || f.min}{f.unit}</span>
                     </div>
                   ))}
 
-                  <div className="border-t border-gray-200 mt-2 pt-2">
-                    <span className="text-[8px] font-bold text-gray-500 uppercase block mb-1">Offset [X, Y, Z]</span>
-                    <div className="flex gap-1">
-                      {[0, 1, 2].map(i => (
-                        <input key={i} type="number" step="1" value={block.position_offset[i]}
-                          onChange={(e) => {
-                            const newBlocks = [...params.blocks];
-                            const newOffset = [...newBlocks[idx].position_offset];
-                            newOffset[i] = parseFloat(e.target.value) || 0;
-                            newBlocks[idx] = {...newBlocks[idx], position_offset: newOffset};
-                            setParams(prev => ({...prev, blocks: newBlocks}));
-                          }} className="w-full p-1 border text-[9px] text-center rounded font-mono" />
-                      ))}
+                  <div className="flex gap-2 mt-1 border-t border-gray-200 pt-1">
+                    <div className="flex-1">
+                      <span className="text-[7px] font-bold text-gray-500 uppercase">Orientacja ram</span>
+                      <select value={block.frame_orientation || 0}
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={(e) => {
+                          const newBlocks = [...params.blocks];
+                          newBlocks[idx] = {...newBlocks[idx], frame_orientation: parseInt(e.target.value)};
+                          setParams(prev => ({...prev, blocks: newBlocks}));
+                        }} className="w-full p-0.5 border rounded text-[8px]">
+                        <option value="0">↕ Wzdłuż szerokości (standard)</option>
+                        <option value="90">↔ Wzdłuż długości (obrót 90°)</option>
+                      </select>
+                    </div>
+                    <div className="flex-1">
+                      <span className="text-[7px] font-bold text-gray-500 uppercase">Odwodnienie</span>
+                      <select value={block.roof_drainage_type || 'gravity'}
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={(e) => {
+                          const newBlocks = [...params.blocks];
+                          newBlocks[idx] = {...newBlocks[idx], roof_drainage_type: e.target.value};
+                          setParams(prev => ({...prev, blocks: newBlocks}));
+                        }} className="w-full p-0.5 border rounded text-[8px]">
+                        <option value="gravity">Grawitacyjne</option>
+                        <option value="vacuum">Podciśnieniowe</option>
+                      </select>
                     </div>
                   </div>
 
-                  <div className="flex gap-2 mt-2">
-                    <div className="flex-1">
-                      <span className="text-[8px] font-bold text-gray-500 uppercase block">Rotacja Y</span>
-                      <select value={block.rotation_y} onChange={(e) => {
-                        const newBlocks = [...params.blocks];
-                        newBlocks[idx] = {...newBlocks[idx], rotation_y: parseFloat(e.target.value)};
-                        setParams(prev => ({...prev, blocks: newBlocks}));
-                      }} className="w-full p-1 border rounded text-[9px]">
-                        <option value="0">0°</option>
-                        <option value="90">90°</option>
-                        <option value="180">180°</option>
-                        <option value="270">270°</option>
-                      </select>
+                  {/* --- ROZWIJANE SZCZEGOLY MODULU --- */}
+                  <details className="mt-1 border-t border-gray-200 pt-1" onClick={(e) => e.stopPropagation()}>
+                    <summary className="text-[8px] font-bold text-indigo-600 cursor-pointer hover:text-indigo-800 select-none">
+                      ▸ Szczegóły modułu (doki, obudowa, doświetlenie…)
+                    </summary>
+                    <div className="mt-1 flex flex-col gap-1.5 pl-1">
+
+                      {/* Strefa dokowa */}
+                      <div className="bg-white rounded p-1 border border-gray-100">
+                        <label className="flex items-center gap-1 text-[8px] font-bold text-gray-600">
+                          <input type="checkbox" checked={block.dock_zone_enabled || false}
+                            onChange={(e) => { const nb = [...params.blocks]; nb[idx] = {...nb[idx], dock_zone_enabled: e.target.checked}; setParams(prev => ({...prev, blocks: nb})); }}
+                          /> Strefa dokowa
+                        </label>
+                        {block.dock_zone_enabled && (
+                          <div className="mt-1 grid grid-cols-3 gap-1">
+                            <div><span className="text-[7px] text-gray-400 block">Strona</span>
+                              <select value={block.dock_zone_side || 'left'} onChange={(e) => { const nb = [...params.blocks]; nb[idx] = {...nb[idx], dock_zone_side: e.target.value}; setParams(prev => ({...prev, blocks: nb})); }} className="w-full p-0.5 border rounded text-[7px]">
+                                <option value="left">Lewa</option><option value="right">Prawa</option><option value="both">Obie</option>
+                              </select>
+                            </div>
+                            <div><span className="text-[7px] text-gray-400 block">Szer.[m]</span>
+                              <input type="number" min="6" max="36" step="1" value={block.dock_zone_width || 12}
+                                onChange={(e) => { const nb = [...params.blocks]; nb[idx] = {...nb[idx], dock_zone_width: parseFloat(e.target.value)||12}; setParams(prev => ({...prev, blocks: nb})); }}
+                                className="w-full p-0.5 border rounded text-[7px] text-center" />
+                            </div>
+                            <div><span className="text-[7px] text-gray-400 block">Nawy dok.</span>
+                              <input type="number" min="1" max="3" step="1" value={block.dock_zone_aisles || 1}
+                                onChange={(e) => { const nb = [...params.blocks]; nb[idx] = {...nb[idx], dock_zone_aisles: parseInt(e.target.value)||1}; setParams(prev => ({...prev, blocks: nb})); }}
+                                className="w-full p-0.5 border rounded text-[7px] text-center" />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Obudowa */}
+                      <div className="bg-white rounded p-1 border border-gray-100">
+                        <span className="text-[8px] font-bold text-gray-600 block mb-0.5">Obudowa</span>
+                        <div className="grid grid-cols-2 gap-1">
+                          <div>
+                            <label className="flex items-center gap-1 text-[7px]">
+                              <input type="checkbox" checked={block.has_cladding !== false}
+                                onChange={(e) => { const nb = [...params.blocks]; nb[idx] = {...nb[idx], has_cladding: e.target.checked}; setParams(prev => ({...prev, blocks: nb})); }}
+                              /> Panele ścienne
+                            </label>
+                          </div>
+                          <div>
+                            <select value={block.cladding_orientation || 'horizontal'}
+                              onChange={(e) => { const nb = [...params.blocks]; nb[idx] = {...nb[idx], cladding_orientation: e.target.value}; setParams(prev => ({...prev, blocks: nb})); }}
+                              className="w-full p-0.5 border rounded text-[7px]">
+                              <option value="horizontal">Poziomo</option>
+                              <option value="vertical">Pionowo</option>
+                            </select>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Dach - konstrukcja */}
+                      <div className="bg-white rounded p-1 border border-gray-100">
+                        <span className="text-[8px] font-bold text-gray-600 block mb-0.5">Dach</span>
+                        <div className="grid grid-cols-2 gap-1">
+                          <div><span className="text-[7px] text-gray-400 block">Wys. dźwigara</span>
+                            <input type="number" min="0.3" max="2.5" step="0.1" value={block.truss_depth || 0.6}
+                              onChange={(e) => { const nb = [...params.blocks]; nb[idx] = {...nb[idx], truss_depth: parseFloat(e.target.value)||0.6}; setParams(prev => ({...prev, blocks: nb})); }}
+                              className="w-full p-0.5 border rounded text-[7px] text-center" />
+                          </div>
+                          <div><span className="text-[7px] text-gray-400 block">Rozstaw płatwi</span>
+                            <input type="number" min="1" max="4" step="0.25" value={block.purlin_spacing || 2.0}
+                              onChange={(e) => { const nb = [...params.blocks]; nb[idx] = {...nb[idx], purlin_spacing: parseFloat(e.target.value)||2.0}; setParams(prev => ({...prev, blocks: nb})); }}
+                              className="w-full p-0.5 border rounded text-[7px] text-center" />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Doswietlenie i oddymianie */}
+                      <div className="bg-white rounded p-1 border border-gray-100">
+                        <span className="text-[8px] font-bold text-gray-600 block mb-0.5">Doświetlenie</span>
+                        <div className="flex flex-col gap-0.5">
+                          {(block.roof_lights || []).map((zone, zi) => (
+                            <div key={zi} className="text-[7px] text-gray-500">
+                              {zone.zone_id}: {(zone.items || []).length} pozycji
+                            </div>
+                          ))}
+                          <button onClick={() => {
+                            const nb = [...params.blocks];
+                            const existing = nb[idx].roof_lights || [];
+                            const newItem = { item_id: `${block.block_id}_${Date.now()}`, item_type: "skylight", width: 2.0, length: 3.0, quantity: 4, vent_count: 0, vent_length: 2.0 };
+                            const mainZone = existing.find(z => z.zone_id === "main");
+                            if (mainZone) {
+                              const updated = existing.map(z => z.zone_id === "main" ? {...z, items: [...(z.items||[]), newItem]} : z);
+                              nb[idx] = {...nb[idx], roof_lights: updated};
+                            } else {
+                              nb[idx] = {...nb[idx], roof_lights: [...existing, { zone_id: "main", items: [newItem] }]};
+                            }
+                            setParams(prev => ({...prev, blocks: nb}));
+                          }} className="text-[7px] bg-cyan-50 text-cyan-700 px-1 py-0.5 rounded border border-cyan-200 hover:bg-cyan-100 self-start">
+                            + Świetlik/Pasmo
+                          </button>
+                          {(block.roof_lights || []).map((zone, zi) => (
+                            (zone.items || []).map((item, ii) => (
+                              <div key={`${zi}-${ii}`} className="flex items-center gap-1 bg-gray-50 rounded p-0.5">
+                                <select value={item.item_type} onChange={(e) => {
+                                  const nb = [...params.blocks];
+                                  const zones = [...(nb[idx].roof_lights || [])];
+                                  const items = [...(zones[zi].items || [])];
+                                  items[ii] = {...items[ii], item_type: e.target.value};
+                                  zones[zi] = {...zones[zi], items};
+                                  nb[idx] = {...nb[idx], roof_lights: zones};
+                                  setParams(prev => ({...prev, blocks: nb}));
+                                }} className="p-0.5 border rounded text-[7px] flex-1">
+                                  <option value="skylight">Świetlik</option>
+                                  <option value="smoke_vent">Klapa</option>
+                                  <option value="light_strip">Pasmo</option>
+                                  <option value="light_strip_with_vents">Pasmo+klapy</option>
+                                </select>
+                                <input type="number" step="0.5" min="0.5" max="6" value={item.width} onChange={(e) => {
+                                  const nb = [...params.blocks]; const zones = [...(nb[idx].roof_lights||[])]; const items = [...(zones[zi].items||[])];
+                                  items[ii] = {...items[ii], width: parseFloat(e.target.value)||1}; zones[zi] = {...zones[zi], items}; nb[idx] = {...nb[idx], roof_lights: zones};
+                                  setParams(prev => ({...prev, blocks: nb}));
+                                }} className="w-8 p-0.5 border rounded text-[7px] text-center" title="Szer" />
+                                <input type="number" step="1" min="1" max="400" value={item.length} onChange={(e) => {
+                                  const nb = [...params.blocks]; const zones = [...(nb[idx].roof_lights||[])]; const items = [...(zones[zi].items||[])];
+                                  items[ii] = {...items[ii], length: parseFloat(e.target.value)||1}; zones[zi] = {...zones[zi], items}; nb[idx] = {...nb[idx], roof_lights: zones};
+                                  setParams(prev => ({...prev, blocks: nb}));
+                                }} className="w-10 p-0.5 border rounded text-[7px] text-center" title="Dł" />
+                                <input type="number" step="1" min="1" max="50" value={item.quantity} onChange={(e) => {
+                                  const nb = [...params.blocks]; const zones = [...(nb[idx].roof_lights||[])]; const items = [...(zones[zi].items||[])];
+                                  items[ii] = {...items[ii], quantity: parseInt(e.target.value)||1}; zones[zi] = {...zones[zi], items}; nb[idx] = {...nb[idx], roof_lights: zones};
+                                  setParams(prev => ({...prev, blocks: nb}));
+                                }} className="w-6 p-0.5 border rounded text-[7px] text-center" title="Ilość" />
+                                <button onClick={() => {
+                                  const nb = [...params.blocks]; const zones = [...(nb[idx].roof_lights||[])]; const items = [...(zones[zi].items||[])];
+                                  items.splice(ii, 1); zones[zi] = {...zones[zi], items}; nb[idx] = {...nb[idx], roof_lights: zones};
+                                  setParams(prev => ({...prev, blocks: nb}));
+                                }} className="text-red-500 text-[7px] px-0.5">✕</button>
+                              </div>
+                            ))
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Konstrukcja - słupy i fundamenty */}
+                      <div className="bg-white rounded p-1 border border-gray-100">
+                        <span className="text-[8px] font-bold text-gray-600 block mb-0.5">Konstrukcja</span>
+                        <div className="grid grid-cols-2 gap-1">
+                          <div><span className="text-[7px] text-gray-400 block">Metoda słupów</span>
+                            <select value={block.column_method || 'default'}
+                              onChange={(e) => { const nb = [...params.blocks]; nb[idx] = {...nb[idx], column_method: e.target.value}; setParams(prev => ({...prev, blocks: nb})); }}
+                              className="w-full p-0.5 border rounded text-[7px]">
+                              <option value="default">Automatyczna</option>
+                              <option value="manual">Ręczna</option>
+                            </select>
+                          </div>
+                          <div><span className="text-[7px] text-gray-400 block">Metoda fundam.</span>
+                            <select value={block.foundation_method || 'default'}
+                              onChange={(e) => { const nb = [...params.blocks]; nb[idx] = {...nb[idx], foundation_method: e.target.value}; setParams(prev => ({...prev, blocks: nb})); }}
+                              className="w-full p-0.5 border rounded text-[7px]">
+                              <option value="default">Automatyczna</option>
+                              <option value="manual">Ręczna</option>
+                            </select>
+                          </div>
+                          <div><span className="text-[7px] text-gray-400 block">Głęb. fund.[m]</span>
+                            <input type="number" min="0.5" max="3" step="0.1" value={block.foundation_depth || 1.0}
+                              onChange={(e) => { const nb = [...params.blocks]; nb[idx] = {...nb[idx], foundation_depth: parseFloat(e.target.value)||1.0}; setParams(prev => ({...prev, blocks: nb})); }}
+                              className="w-full p-0.5 border rounded text-[7px] text-center" />
+                          </div>
+                          <div><span className="text-[7px] text-gray-400 block">Cokół [m]</span>
+                            <input type="number" min="0.1" max="0.6" step="0.02" value={block.plinth_top_level || 0.30}
+                              onChange={(e) => { const nb = [...params.blocks]; nb[idx] = {...nb[idx], plinth_top_level: parseFloat(e.target.value)||0.30}; setParams(prev => ({...prev, blocks: nb})); }}
+                              className="w-full p-0.5 border rounded text-[7px] text-center" />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Panel obudowy - wybor z katalogu */}
+                      <div className="bg-white rounded p-1 border border-gray-100">
+                        <span className="text-[8px] font-bold text-gray-600 block mb-0.5">Panel obudowy</span>
+                        <select value={block.cladding_panel_id || 'SP2B_E_PIR_100'}
+                          onChange={(e) => { const nb = [...params.blocks]; nb[idx] = {...nb[idx], cladding_panel_id: e.target.value}; setParams(prev => ({...prev, blocks: nb})); }}
+                          className="w-full p-0.5 border rounded text-[7px]">
+                          {Object.entries(catalog || {}).map(([id, p]) => (
+                            <option key={id} value={id}>{p.name} {p.thickness}mm ({p.core})</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Blacha dachowa */}
+                      <div className="bg-white rounded p-1 border border-gray-100">
+                        <span className="text-[8px] font-bold text-gray-600 block mb-0.5">Blacha dachowa</span>
+                        <select value={block.roof_sheet_id || 'T85_08'}
+                          onChange={(e) => { const nb = [...params.blocks]; nb[idx] = {...nb[idx], roof_sheet_id: e.target.value}; setParams(prev => ({...prev, blocks: nb})); }}
+                          className="w-full p-0.5 border rounded text-[7px]">
+                          {Object.entries(roofSheetCatalog || {}).map(([id, s]) => (
+                            <option key={id} value={id}>{s.name} {s.thickness}mm (rozp. {s.span}m)</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Posadzka */}
+                      <div className="bg-white rounded p-1 border border-gray-100">
+                        <span className="text-[8px] font-bold text-gray-600 block mb-0.5">Posadzka</span>
+                        <div className="grid grid-cols-2 gap-1">
+                          <div><span className="text-[7px] text-gray-400 block">Grubość [m]</span>
+                            <input type="number" min="0.1" max="0.4" step="0.02" value={block.floor_thickness || 0.2}
+                              onChange={(e) => { const nb = [...params.blocks]; nb[idx] = {...nb[idx], floor_thickness: parseFloat(e.target.value)||0.2}; setParams(prev => ({...prev, blocks: nb})); }}
+                              className="w-full p-0.5 border rounded text-[7px] text-center" />
+                          </div>
+                          <div><span className="text-[7px] text-gray-400 block">Podbudowa</span>
+                            <select value={block.floor_base_type || 'lean_concrete'}
+                              onChange={(e) => { const nb = [...params.blocks]; nb[idx] = {...nb[idx], floor_base_type: e.target.value}; setParams(prev => ({...prev, blocks: nb})); }}
+                              className="w-full p-0.5 border rounded text-[7px]">
+                              <option value="lean_concrete">Chudy beton</option>
+                              <option value="gravel">Kruszywo</option>
+                            </select>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Bezpieczenstwo pozarowe */}
+                      <div className="bg-white rounded p-1 border border-gray-100">
+                        <span className="text-[8px] font-bold text-gray-600 block mb-0.5">PPOŻ</span>
+                        <div className="grid grid-cols-2 gap-1">
+                          <div><span className="text-[7px] text-gray-400 block">Obc. ogniowe [MJ/m²]</span>
+                            <input type="number" min="100" max="4000" step="50" value={block.fire_load_qd || 500}
+                              onChange={(e) => { const nb = [...params.blocks]; nb[idx] = {...nb[idx], fire_load_qd: parseFloat(e.target.value)||500}; setParams(prev => ({...prev, blocks: nb})); }}
+                              className="w-full p-0.5 border rounded text-[7px] text-center" />
+                          </div>
+                          <div className="flex items-end pb-0.5">
+                            <label className="flex items-center gap-1 text-[7px]">
+                              <input type="checkbox" checked={block.has_sprinklers || false}
+                                onChange={(e) => { const nb = [...params.blocks]; nb[idx] = {...nb[idx], has_sprinklers: e.target.checked}; setParams(prev => ({...prev, blocks: nb})); }}
+                              /> Tryskacze
+                            </label>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Stezenia */}
+                      <div className="bg-white rounded p-1 border border-gray-100">
+                        <span className="text-[8px] font-bold text-gray-600 block mb-0.5">Stężenia</span>
+                        <div className="grid grid-cols-2 gap-1">
+                          <div>
+                            <label className="flex items-center gap-1 text-[7px]">
+                              <input type="checkbox" checked={block.bracing_roof !== false}
+                                onChange={(e) => { const nb = [...params.blocks]; nb[idx] = {...nb[idx], bracing_roof: e.target.checked}; setParams(prev => ({...prev, blocks: nb})); }}
+                              /> Stężenia dachowe
+                            </label>
+                          </div>
+                          <div>
+                            <select value={block.bracing_type || 'x_cross'}
+                              onChange={(e) => { const nb = [...params.blocks]; nb[idx] = {...nb[idx], bracing_type: e.target.value}; setParams(prev => ({...prev, blocks: nb})); }}
+                              className="w-full p-0.5 border rounded text-[7px]">
+                              <option value="x_cross">Krzyżowe</option>
+                              <option value="portal_frame">Portalowe</option>
+                            </select>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Bramy i doki - uproszczona siatka */}
+                      <div className="bg-white rounded p-1 border border-gray-100">
+                        <span className="text-[8px] font-bold text-gray-600 block mb-0.5">Bramy i Doki</span>
+                        <p className="text-[7px] text-gray-400 mb-1">Podaj konfigurację doków jako JSON lub użyj siatki w trybie Simple.</p>
+                        <div className="grid grid-cols-3 gap-1">
+                          <div><span className="text-[7px] text-gray-400 block">Bram szt.</span>
+                            <input type="number" min="0" max="20" step="1" value={block.gates_count || 0}
+                              onChange={(e) => { const nb = [...params.blocks]; nb[idx] = {...nb[idx], gates_count: parseInt(e.target.value)||0}; setParams(prev => ({...prev, blocks: nb})); }}
+                              className="w-full p-0.5 border rounded text-[7px] text-center" />
+                          </div>
+                          <div><span className="text-[7px] text-gray-400 block">Doków szt.</span>
+                            <input type="number" min="0" max="30" step="1" value={block.docks_count || 0}
+                              onChange={(e) => { const nb = [...params.blocks]; nb[idx] = {...nb[idx], docks_count: parseInt(e.target.value)||0}; setParams(prev => ({...prev, blocks: nb})); }}
+                              className="w-full p-0.5 border rounded text-[7px] text-center" />
+                          </div>
+                          <div><span className="text-[7px] text-gray-400 block">Strona</span>
+                            <select value={block.docks_side || 'left'}
+                              onChange={(e) => { const nb = [...params.blocks]; nb[idx] = {...nb[idx], docks_side: e.target.value}; setParams(prev => ({...prev, blocks: nb})); }}
+                              className="w-full p-0.5 border rounded text-[7px]">
+                              <option value="left">Lewa</option>
+                              <option value="right">Prawa</option>
+                              <option value="both">Obie</option>
+                            </select>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Pomieszczenia techniczne */}
+                      <div className="bg-white rounded p-1 border border-gray-100">
+                        <span className="text-[8px] font-bold text-gray-600 block mb-0.5">Pomieszczenia techniczne</span>
+                        {(block.technical_rooms || []).map((room, ri) => (
+                          <div key={ri} className="flex items-center gap-1 mb-0.5 bg-gray-50 rounded p-0.5">
+                            <span className="text-[7px] text-gray-600 flex-1">{room.room_id} ({room.width}×{room.length}m)</span>
+                            <button onClick={() => {
+                              const nb = [...params.blocks]; const rooms = [...(nb[idx].technical_rooms||[])]; rooms.splice(ri, 1);
+                              nb[idx] = {...nb[idx], technical_rooms: rooms}; setParams(prev => ({...prev, blocks: nb}));
+                            }} className="text-red-500 text-[7px]">✕</button>
+                          </div>
+                        ))}
+                        <button onClick={() => {
+                          const nb = [...params.blocks];
+                          const rooms = [...(nb[idx].technical_rooms || [])];
+                          rooms.push({ room_id: `tech_${rooms.length+1}`, width: 6, length: 8, side: "left", position_along: 0 });
+                          nb[idx] = {...nb[idx], technical_rooms: rooms};
+                          setParams(prev => ({...prev, blocks: nb}));
+                        }} className="text-[7px] bg-gray-100 text-gray-600 px-1 py-0.5 rounded border hover:bg-gray-200 mt-0.5">+ Pomieszczenie</button>
+                      </div>
+
+                      {/* Biura zewnetrzne */}
+                      <div className="bg-white rounded p-1 border border-gray-100">
+                        <span className="text-[8px] font-bold text-gray-600 block mb-0.5">Biura zewnętrzne</span>
+                        {(block.external_offices || []).map((off, oi) => (
+                          <div key={oi} className="flex items-center gap-1 mb-0.5 bg-gray-50 rounded p-0.5">
+                            <span className="text-[7px] text-gray-600 flex-1">{off.office_id} ({off.width}×{off.length}m, {off.floors}p.)</span>
+                            <button onClick={() => {
+                              const nb = [...params.blocks]; const offs = [...(nb[idx].external_offices||[])]; offs.splice(oi, 1);
+                              nb[idx] = {...nb[idx], external_offices: offs}; setParams(prev => ({...prev, blocks: nb}));
+                            }} className="text-red-500 text-[7px]">✕</button>
+                          </div>
+                        ))}
+                        <button onClick={() => {
+                          const nb = [...params.blocks];
+                          const offs = [...(nb[idx].external_offices || [])];
+                          offs.push({ office_id: `office_${offs.length+1}`, width: 12, length: 24, floors: 2, side: "front", floor_height: 3.3 });
+                          nb[idx] = {...nb[idx], external_offices: offs};
+                          setParams(prev => ({...prev, blocks: nb}));
+                        }} className="text-[7px] bg-gray-100 text-gray-600 px-1 py-0.5 rounded border hover:bg-gray-200 mt-0.5">+ Biuro zewn.</button>
+                      </div>
+
+                      {/* Antresole wewnetrzne */}
+                      <div className="bg-white rounded p-1 border border-gray-100">
+                        <span className="text-[8px] font-bold text-gray-600 block mb-0.5">Antresole wewnętrzne</span>
+                        {(block.internal_offices || []).map((off, oi) => (
+                          <div key={oi} className="flex items-center gap-1 mb-0.5 bg-gray-50 rounded p-0.5">
+                            <span className="text-[7px] text-gray-600 flex-1">{off.office_id} ({off.width}×{off.length}m)</span>
+                            <button onClick={() => {
+                              const nb = [...params.blocks]; const offs = [...(nb[idx].internal_offices||[])]; offs.splice(oi, 1);
+                              nb[idx] = {...nb[idx], internal_offices: offs}; setParams(prev => ({...prev, blocks: nb}));
+                            }} className="text-red-500 text-[7px]">✕</button>
+                          </div>
+                        ))}
+                        <button onClick={() => {
+                          const nb = [...params.blocks];
+                          const offs = [...(nb[idx].internal_offices || [])];
+                          offs.push({ office_id: `mezzanine_${offs.length+1}`, width: 10, length: 20, corner: "front_left", floor_height: 3.0 });
+                          nb[idx] = {...nb[idx], internal_offices: offs};
+                          setParams(prev => ({...prev, blocks: nb}));
+                        }} className="text-[7px] bg-gray-100 text-gray-600 px-1 py-0.5 rounded border hover:bg-gray-200 mt-0.5">+ Antresola</button>
+                      </div>
+
                     </div>
-                    <div className="flex-1">
-                      <span className="text-[8px] font-bold text-gray-500 uppercase block">Połączenie</span>
-                      <select value={block.connection_type} onChange={(e) => {
-                        const newBlocks = [...params.blocks];
-                        newBlocks[idx] = {...newBlocks[idx], connection_type: e.target.value};
-                        setParams(prev => ({...prev, blocks: newBlocks}));
-                      }} className="w-full p-1 border rounded text-[9px]">
-                        <option value="expansion_joint">Dylatacja</option>
-                        <option value="fire_wall">Ściana PPOŻ</option>
-                        <option value="merged">Scalony</option>
-                      </select>
-                    </div>
-                  </div>
+                  </details>
                 </div>
-              ))}
+              );})}
+            </div>
+          </CollapsibleSection>
+
+          <CollapsibleSection title="Rzut — Rozmieszczenie Modułów" defaultOpen={true}>
+            <div className="h-[350px]">
+              <ModuleLayoutEditor
+                modules={params.blocks || []}
+                setModules={(newBlocks) => setParams(prev => ({...prev, blocks: newBlocks}))}
+                connections={params.module_connections || []}
+                setConnections={(newConns) => setParams(prev => ({...prev, module_connections: newConns}))}
+                selectedModuleId={params._selectedModuleId || null}
+                setSelectedModuleId={(id) => setParams(prev => ({...prev, _selectedModuleId: id}))}
+              />
+            </div>
+          </CollapsibleSection>
+
+          <CollapsibleSection title="Połączenia Modułów">
+            <div className="flex flex-col gap-1">
+              {(params.module_connections || []).length === 0 && (
+                <p className="text-[9px] text-gray-400 italic">Przesuwaj moduły na rzucie aby stworzyć styki. Kliknij na styk aby zmienić typ połączenia.</p>
+              )}
+              {(params.module_connections || []).map((conn, ci) => {
+                const modA = (params.blocks || [])[conn.moduleA];
+                const modB = (params.blocks || [])[conn.moduleB];
+                if (!modA || !modB) return null;
+                const perpendicular = (modA.frame_orientation || 0) !== (modB.frame_orientation || 0);
+                const heightDiff = Math.abs((modA.clear_height || 10) - (modB.clear_height || 10));
+                const hasHeightDiff = heightDiff > 0.5;
+                return (
+                  <div key={ci} className="p-1.5 bg-gray-50 rounded border border-gray-100 text-[8px]">
+                    <div className="flex items-center gap-1 mb-1">
+                      <span className="font-bold text-gray-700 truncate flex-1">{modA.block_id} ↔ {modB.block_id}</span>
+                      {hasHeightDiff && <span className="text-[7px] text-orange-600" title={`Różnica wysokości: ${heightDiff.toFixed(1)}m`}>Δh={heightDiff.toFixed(1)}m</span>}
+                      {perpendicular && <span className="text-amber-600 text-[7px]" title="Prostopadłe ramy">⚠90°</span>}
+                    </div>
+                    <select value={conn.type || 'expansion_joint'}
+                      onChange={(e) => {
+                        const newConns = [...(params.module_connections || [])];
+                        newConns[ci] = {...newConns[ci], type: e.target.value};
+                        setParams(prev => ({...prev, module_connections: newConns}));
+                      }} className="w-full p-0.5 border rounded text-[8px] mb-1">
+                      <option value="expansion_joint">Dylatacja (bez ściany wewn.)</option>
+                      {!perpendicular && <option value="none">Bez ściany (scalone)</option>}
+                      <option value="internal_wall">Ściana wewn. (bez odporności ogn.)</option>
+                      <option value="fire_wall">Ściana PPOŻ</option>
+                    </select>
+                    {conn.type === 'fire_wall' && (
+                      <select value={conn.rei_class || 'REI60'}
+                        onChange={(e) => {
+                          const newConns = [...(params.module_connections || [])];
+                          newConns[ci] = {...newConns[ci], rei_class: e.target.value};
+                          setParams(prev => ({...prev, module_connections: newConns}));
+                        }} className="w-full p-0.5 border rounded text-[7px] border-red-200 bg-red-50">
+                        <option value="REI60">REI 60</option>
+                        <option value="REI120">REI 120</option>
+                        <option value="REI240">REI 240</option>
+                      </select>
+                    )}
+                    <p className="text-[7px] text-gray-400 mt-0.5 leading-tight">
+                      {conn.type === 'expansion_joint' && (hasHeightDiff
+                        ? '⚡ Dylatacja: brak ściany wewnątrz, ściana zamykająca nad niższym dachem (attyka)'
+                        : '⚡ Dylatacja: brak ściany wewnątrz budynku, podwójne słupy')}
+                      {conn.type === 'none' && '→ Moduły scalone: wspólna przestrzeń, brak ściany'}
+                      {conn.type === 'internal_wall' && '→ Ściana działowa bez odporności ogniowej'}
+                      {conn.type === 'fire_wall' && `→ Ściana PPOŻ ${conn.rei_class || 'REI60'} wystająca ≥0.3m ponad dach`}
+                    </p>
+                  </div>
+                );
+              })}
             </div>
           </CollapsibleSection>
         </div>
