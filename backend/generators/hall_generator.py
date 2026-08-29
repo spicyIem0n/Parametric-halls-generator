@@ -27,6 +27,57 @@ from .reserve_zone_factory import ReserveZoneFactory
 from .roof_light_factory import RoofLightFactory
 
 
+def _mat_mult(A, B):
+    """Mnozenie macierzy 3x3."""
+    return [[sum(A[i][k] * B[k][j] for k in range(3)) for j in range(3)] for i in range(3)]
+
+
+def _rot_x(a):
+    c, s = math.cos(a), math.sin(a)
+    return [[1, 0, 0], [0, c, -s], [0, s, c]]
+
+
+def _rot_y(a):
+    c, s = math.cos(a), math.sin(a)
+    return [[c, 0, s], [0, 1, 0], [-s, 0, c]]
+
+
+def _rot_z(a):
+    c, s = math.cos(a), math.sin(a)
+    return [[c, -s, 0], [s, c, 0], [0, 0, 1]]
+
+
+def _euler_xyz_to_matrix(rx, ry, rz):
+    """Macierz rotacji dla katow Eulera w konwencji Three.js 'XYZ': R = Rx * Ry * Rz."""
+    return _mat_mult(_mat_mult(_rot_x(rx), _rot_y(ry)), _rot_z(rz))
+
+
+def _matrix_to_euler_xyz(R):
+    """Rozklada macierz rotacji na katy Eulera (rx, ry, rz) w konwencji Three.js 'XYZ'.
+    Odpowiada Three.js Euler.setFromRotationMatrix z order='XYZ'.
+    Dla R = Rx*Ry*Rz: ry = asin(R[0][2]); jesli |R[0][2]| < 1: rx = atan2(-R[1][2], R[2][2]),
+    rz = atan2(-R[0][1], R[0][0]); w przeciwnym razie gimbal lock."""
+    m02 = max(-1.0, min(1.0, R[0][2]))
+    ry = math.asin(m02)
+    if abs(m02) < 0.999999:
+        rx = math.atan2(-R[1][2], R[2][2])
+        rz = math.atan2(-R[0][1], R[0][0])
+    else:
+        # gimbal lock
+        rx = math.atan2(R[2][1], R[1][1])
+        rz = 0.0
+    return rx, ry, rz
+
+
+def _mat_vec(R, v):
+    """Mnozenie macierz 3x3 * wektor 3."""
+    return [
+        R[0][0]*v[0] + R[0][1]*v[1] + R[0][2]*v[2],
+        R[1][0]*v[0] + R[1][1]*v[1] + R[1][2]*v[2],
+        R[2][0]*v[0] + R[2][1]*v[1] + R[2][2]*v[2],
+    ]
+
+
 class HallGenerator:
     def __init__(self, params: HallParameters):
         self.params = params
@@ -109,17 +160,17 @@ class HallGenerator:
             # Aplikuj PPOŻ per blok
             block_components = self._apply_fire_safety(block_components, grid)
 
-            # Transformacja: offset (bez rotacji!)
-            # Orientacja ram jest realizowana przez zamiane width/length w _block_to_params,
-            # nie przez obracanie gotowych komponentow - to pozwala uniknac bledow
-            # geometrycznych w generatorach (dach, obudowa, platwie itd.)
+            # Offset docelowy modulu w ukladzie globalnym.
+            # Nowy edytor: position_x/position_z. Starsze projekty: position_offset (fallback).
             offset = block.position_offset
+            rot_y = block.rotation_y  # legacy
             if block.position_x != 0.0 or block.position_z != 0.0 or block.frame_orientation != 0:
                 offset = [block.position_x, 0.0, block.position_z]
+                rot_y = float(block.frame_orientation)
             transformed = self._transform_components(
                 block_components,
                 offset=offset,
-                rotation_y=0.0,  # Nigdy nie obracamy - orientacja przez zamiane wymiarow
+                rotation_y=rot_y,
                 block_id=block.block_id
             )
             all_components.extend(transformed)
@@ -139,14 +190,13 @@ class HallGenerator:
         # Kopiujemy bazowe parametry (materiały, stałe)
         base_dict = self.params.model_dump()
 
-        # Nadpisujemy geometrię z bloku
-        # Gdy frame_orientation == 90, zamieniamy width <-> length.
-        # Dzieki temu ramy (dzwigary) generuja sie wzdluz "nowej szerokosci",
-        # co odpowiada obroceniu kierunku konstrukcji o 90 stopni.
+        # Moduł generowany z ORYGINALNYMI wymiarami w lokalnym ukladzie.
+        # Obrot (frame_orientation) realizuje _transform_components przez
+        # rotacje wokol osi Y - NIE przez zamiane wymiarow.
+        # width = rozpietosc ram (lokalna os X), length = powtarzalnosc (lokalna os Z).
         w = block.width
         l = block.length
-        if block.frame_orientation == 90:
-            w, l = l, w
+
 
         base_dict.update({
             "hall_type": "simple",  # Wewnętrznie generujemy jako simple
@@ -167,19 +217,43 @@ class HallGenerator:
             "has_cladding": block.has_cladding,
             "cladding_orientation": block.cladding_orientation,
             "cladding_panel_id": block.cladding_panel_id,
+            "cladding_thickness": block.cladding_thickness,
+            "cladding_bottom_level": block.cladding_bottom_level,
             # Dach per modul
             "truss_depth": block.truss_depth,
             "purlin_spacing": block.purlin_spacing,
             "roof_sheet_id": block.roof_sheet_id,
+            "roof_panel_thickness": block.roof_panel_thickness,
+            "drainage_zones_x": block.drainage_zones_x,
+            "drainage_zones_z": block.drainage_zones_z,
+            "roof_slope_percent": block.roof_slope_percent,
+            # Konstrukcja per modul
+            "column_method": block.column_method,
+            "manual_column_sections": block.manual_column_sections,
+            "foundation_method": block.foundation_method,
+            "manual_sizes": block.manual_sizes,
+            "foundation_depth": block.foundation_depth,
+            "dock_foundation_depth": block.dock_foundation_depth,
+            "plinth_thickness": block.plinth_thickness,
+            "plinth_top_level": block.plinth_top_level,
+            # Posadzka per modul
+            "floor_thickness": block.floor_thickness,
+            "floor_base_type": block.floor_base_type,
+            "floor_base_thickness": block.floor_base_thickness,
+            # PPOZ per modul
+            "fire_load_qd": block.fire_load_qd,
+            "has_sprinklers": block.has_sprinklers,
+            "fire_walls": block.fire_walls or [],
             # Doswietlenie - jesli block ma wlasne, uzyj ich; inaczej puste
             "roof_lights": block.roof_lights if block.roof_lights is not None else [],
-            # Czyścimy zagnieżdżone konfiguracje
+            # Pomieszczenia per modul
+            "technical_rooms": block.technical_rooms or [],
+            "external_offices": block.external_offices or [],
+            "internal_offices": block.internal_offices or [],
+            "office_reserve_zones": block.office_reserve_zones or [],
+            # Czyścimy wielobryłowość (zapobiegamy rekurencji)
             "blocks": [],
-            "fire_walls": block.fire_walls or [],
-            "technical_rooms": [],
-            "external_offices": [],
-            "internal_offices": [],
-            "office_reserve_zones": [],
+            "module_connections": [],
         })
 
         return HallParameters(**base_dict)
@@ -203,31 +277,27 @@ class HallGenerator:
                 c.meta["block_id"] = block_id
             return components
 
-        cos_a = math.cos(math.radians(rotation_y))
-        sin_a = math.sin(math.radians(rotation_y))
+        R_mod = _rot_y(math.radians(rotation_y))
         ox, oy, oz = offset
 
         transformed = []
         for c in components:
+            # Rotacja pozycji: obrot wokol Y * pozycja lokalna, potem offset
             px, py, pz = c.position
+            rpx, rpy, rpz = _mat_vec(R_mod, [px, py, pz])
+            new_x = rpx + ox
+            new_y = rpy + oy
+            new_z = rpz + oz
 
-            # Rotacja wokół Y (w płaszczyźnie XZ)
-            new_x = px * cos_a - pz * sin_a
-            new_z = px * sin_a + pz * cos_a
-
-            # Offset
-            new_x += ox
-            new_y = py + oy
-            new_z += oz
-
-            # Rotacja elementu (dodajemy rotację Y do istniejącej)
+            # Rotacja elementu: ZLOZENIE macierzy R_mod * R_element,
+            # potem rozklad na katy Eulera XYZ (konwencja Three.js).
             rx, ry, rz = c.rotation
-            new_ry = ry + math.radians(rotation_y)
+            R_elem = _euler_xyz_to_matrix(rx, ry, rz)
+            R_final = _mat_mult(R_mod, R_elem)
+            new_rx, new_ry, new_rz = _matrix_to_euler_xyz(R_final)
 
-            # Skala — dla rotacji 90° zamieniamy X i Z
+            # Skala BEZ ZMIAN — wymiary wlasne elementu zachowane.
             sx, sy, sz = c.scale
-            if abs(rotation_y) % 180 == 90:
-                sx, sz = sz, sx
 
             meta = dict(c.meta) if c.meta else {}
             meta["block_id"] = block_id
@@ -235,7 +305,7 @@ class HallGenerator:
             transformed.append(Component3D(
                 type=c.type,
                 position=[round(new_x, 6), round(new_y, 6), round(new_z, 6)],
-                rotation=[rx, round(new_ry, 6), rz],
+                rotation=[round(new_rx, 6), round(new_ry, 6), round(new_rz, 6)],
                 scale=[sx, sy, sz],
                 meta=meta
             ))

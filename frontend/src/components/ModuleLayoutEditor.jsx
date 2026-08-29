@@ -260,14 +260,16 @@ const ModuleLayoutEditor = ({ modules, setModules, connections, setConnections, 
       ctx.strokeRect(sx, sy, sw, sl);
 
       // Znacznik orientacji ram (linie przerywane)
+      // orient=0: ramy biegna wzdluz X, powtarzane w Z -> linie poziome (dziela l)
+      // orient=90: ramy biegna wzdluz Z, powtarzane w X -> linie pionowe (dziela w)
       ctx.save();
       ctx.setLineDash([4, 4]);
       ctx.strokeStyle = color + '80';
       ctx.lineWidth = 1;
       const orientation = mod.frame_orientation || 0;
+      const spacing = mod.bay_spacing || 6;
       if (orientation === 0) {
-        // Ramy wzdluz szerokosci (linie pionowe w rzucie = rownolegly do Z)
-        const spacing = mod.bay_spacing || 6;
+        // Powtarzalnosc wzdluz Z (efektywne l) -> linie poziome
         const numBays = Math.max(1, Math.round(l / spacing));
         for (let b = 1; b < numBays; b++) {
           const bz = z - l / 2 + b * (l / numBays);
@@ -278,8 +280,7 @@ const ModuleLayoutEditor = ({ modules, setModules, connections, setConnections, 
           ctx.stroke();
         }
       } else {
-        // Ramy wzdluz dlugosci (linie poziome w rzucie)
-        const spacing = mod.bay_spacing || 6;
+        // Powtarzalnosc wzdluz X (efektywne w) -> linie pionowe
         const numBays = Math.max(1, Math.round(w / spacing));
         for (let b = 1; b < numBays; b++) {
           const bx = x - w / 2 + b * (w / numBays);
@@ -302,7 +303,7 @@ const ModuleLayoutEditor = ({ modules, setModules, connections, setConnections, 
       ctx.font = `${fontSize * 0.75}px sans-serif`;
       ctx.fillStyle = '#475569';
       ctx.fillText(`${mod.width} x ${mod.length} m`, sx + sw / 2, sy + sl / 2 + fontSize * 0.5);
-      ctx.fillText(`h=${mod.clear_height}m ${orientation === 0 ? '↕ram' : '↔ram'}`, sx + sw / 2, sy + sl / 2 + fontSize * 1.3);
+      ctx.fillText(`h=${mod.clear_height}m | ramy: ${orientation === 0 ? "wzdł. szer." : "wzdł. dł. (90°)"}`, sx + sw / 2, sy + sl / 2 + fontSize * 1.3);
     });
 
     // Polaczenia (styki)

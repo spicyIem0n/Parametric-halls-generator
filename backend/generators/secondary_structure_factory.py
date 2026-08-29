@@ -112,49 +112,63 @@ class SecondaryStructureFactory:
         elements = []
         t = SecondaryStructureFactory.TRIMMER_SECTION
 
+        parapet_h = grid.get_parapet_height()
+
         for side in ["left", "right"]:
             x_pos = -grid.half_width if side == "left" else grid.half_width
 
             for bay_idx in range(grid.num_bays):
+                # Zbierz wszystkie otwory (doki/bramy) w tym przęśle
+                openings = []  # (z_center, door_w, door_h)
                 for slot_idx in range(grid.slots_per_bay):
                     dock_type = grid.get_dock_type_at_slot(side, bay_idx, slot_idx)
                     if dock_type == "none":
                         continue
-
                     z_center = grid.get_slot_center_z(bay_idx, slot_idx)
                     door_w = DEFAULTS.dock_door_width if dock_type == "dock" else DEFAULTS.gate_door_width
                     door_h = DEFAULTS.dock_door_height if dock_type == "dock" else DEFAULTS.gate_door_height
+                    openings.append((z_center, door_w, door_h))
 
-                    # Nadproże (belka pozioma nad otworem)
-                    lintel_y = door_h + t / 2
-                    elements.append(Component3D(
-                        type="trimmer",
-                        position=[x_pos, lintel_y, z_center],
-                        rotation=[0, 0, 0],
-                        scale=[t, t, door_w + 0.2]  # Lekko szersze niż otwór
-                    ))
+                if not openings:
+                    continue
 
-                    # Słupki boczne (pionowe po bokach otworu)
+                # Przęsło (rama): rygle poziome rozpięte pomiędzy słupami ramy.
+                bay_center_z = grid.get_intermediate_z(bay_idx)
+                bay_len = grid.axes_z[bay_idx + 1] - grid.axes_z[bay_idx]
+
+                # Nadproże na wysokości najwyższego otworu w przęśle
+                # (jeden poziomy rygiel przez całe przęsło, oparty na słupach ramy).
+                max_door_h = max(o[2] for o in openings)
+                lintel_y = max_door_h + t / 2
+                elements.append(Component3D(
+                    type="trimmer",
+                    position=[x_pos, lintel_y, bay_center_z],
+                    rotation=[0, 0, 0],
+                    scale=[t, t, bay_len]
+                ))
+
+                # Słupki boczne (pionowe) po bokach każdego otworu — bez zmian,
+                # oparte na nadprożu.
+                for (z_center, door_w, door_h) in openings:
                     for z_offset in [-door_w / 2, door_w / 2]:
-                        post_h = door_h
                         elements.append(Component3D(
                             type="trimmer",
-                            position=[x_pos, post_h / 2, z_center + z_offset],
+                            position=[x_pos, door_h / 2, z_center + z_offset],
                             rotation=[0, 0, 0],
-                            scale=[t, post_h, t]
+                            scale=[t, door_h, t]
                         ))
 
-                    # Rygle powyżej otworu (od nadproża do attyki)
-                    parapet_h = grid.get_parapet_height()
-                    y = lintel_y + SecondaryStructureFactory.GIRT_SPACING
-                    while y < parapet_h - 0.5:
-                        elements.append(Component3D(
-                            type="girt",
-                            position=[x_pos, y, z_center],
-                            rotation=[0, 0, 0],
-                            scale=[t, t, grid.slot_width]
-                        ))
-                        y += SecondaryStructureFactory.GIRT_SPACING
+                # Rygle powyżej nadproża (do attyki) — również rozpięte
+                # pomiędzy słupami ramy (raz na przęsło).
+                y = lintel_y + SecondaryStructureFactory.GIRT_SPACING
+                while y < parapet_h - 0.5:
+                    elements.append(Component3D(
+                        type="girt",
+                        position=[x_pos, y, bay_center_z],
+                        rotation=[0, 0, 0],
+                        scale=[t, t, bay_len]
+                    ))
+                    y += SecondaryStructureFactory.GIRT_SPACING
 
         return elements
 

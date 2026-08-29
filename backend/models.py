@@ -67,25 +67,62 @@ class BlockDefinition(BaseModel):
     position_offset: List[float] = [0.0, 0.0, 0.0]  # [x, y, z] offset (legacy)
     rotation_y: float = 0.0  # legacy
     connection_type: str = "expansion_joint"  # "expansion_joint" | "fire_wall" | "merged"
-    # Nowe pola - edytor modulowy
+    # Pozycja i orientacja (edytor modulowy)
     position_x: float = 0.0
     position_z: float = 0.0
     frame_orientation: int = 0  # 0 = ramy wzdluz szerokosci, 90 = ramy wzdluz dlugosci
-    # Pola opcjonalne - pełna konfiguracja per moduł (jak w Simple)
+    # Strefa dokowa
     dock_zone_enabled: bool = False
     dock_zone_side: str = "left"
     dock_zone_width: float = 12.0
     dock_zone_aisles: int = 1
     docks_config: Dict[str, str] = {}
+    # Obudowa
     has_cladding: bool = True
     cladding_orientation: str = "horizontal"
     cladding_panel_id: str = "SP2B_E_PIR_100"
+    cladding_thickness: float = 0.1
+    cladding_bottom_level: float = 0.25
+    # Dach
     truss_depth: float = 0.6
     purlin_spacing: float = 2.0
     roof_sheet_id: str = "T85_08"
-    roof_lights: Optional[List[Any]] = None  # None = uzyj globalnych, [] = puste
+    roof_panel_thickness: float = 0.15
+    drainage_zones_x: int = 2
+    drainage_zones_z: int = 4
+    roof_slope_percent: float = 2.0
+    # Konstrukcja
+    column_method: str = "default"
+    manual_column_sections: Dict[str, List[float]] = {
+        "external_main": [0.4, 0.4], "external_corner": [0.4, 0.4],
+        "external_intermediate_cladding": [0.3, 0.3], "internal_main": [0.4, 0.4]
+    }
+    foundation_method: str = "default"
+    manual_sizes: Dict[str, List[float]] = {
+        "external_main": [2.5, 4.0, 0.45], "external_corner": [2.5, 4.0, 0.45],
+        "external_intermediate_cladding": [1.5, 1.5, 0.40], "internal_main": [2.5, 2.5, 0.45]
+    }
+    foundation_depth: float = 1.0
+    dock_foundation_depth: float = 1.2
+    plinth_thickness: float = 0.24
+    plinth_top_level: float = 0.30
+    # Posadzka
+    floor_thickness: float = 0.2
+    floor_base_type: str = "lean_concrete"
+    floor_base_thickness: float = 0.15
+    # PPOŻ
+    fire_load_qd: float = 500.0
+    has_sprinklers: bool = False
     fire_walls: List[Any] = []
+    # Stezenia
     bracing_config: Optional[Dict[str, Any]] = None
+    # Doswietlenie
+    roof_lights: Optional[List[Any]] = None  # None = uzyj globalnych, [] = puste
+    # Pomieszczenia i biura
+    technical_rooms: List[Any] = []
+    external_offices: List[Any] = []
+    internal_offices: List[Any] = []
+    office_reserve_zones: List[Any] = []
 
 
 class BracingConfig(BaseModel):

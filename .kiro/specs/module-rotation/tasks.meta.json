@@ -1,0 +1,113 @@
+{
+  "pbtResults": {},
+  "executionHistory": {
+    "1. Przywrócenie prawdziwego obrotu w `_transform_components`": [
+      {
+        "executionId": "5ad6388b-5924-46d6-92a0-f427c2f66c7c",
+        "chatSessionId": "sess_0f9953df-f52e-45c3-ab0c-88888d93f7f5",
+        "timestamp": 1788017038195
+      },
+      {
+        "executionId": "5ad6388b-5924-46d6-92a0-f427c2f66c7c",
+        "chatSessionId": "sess_0f9953df-f52e-45c3-ab0c-88888d93f7f5",
+        "timestamp": 1788017099379
+      }
+    ],
+    "2. Usunięcie zamiany wymiarów w `_block_to_params`": [
+      {
+        "executionId": "5ad6388b-5924-46d6-92a0-f427c2f66c7c",
+        "chatSessionId": "sess_0f9953df-f52e-45c3-ab0c-88888d93f7f5",
+        "timestamp": 1788017105069
+      },
+      {
+        "executionId": "5ad6388b-5924-46d6-92a0-f427c2f66c7c",
+        "chatSessionId": "sess_0f9953df-f52e-45c3-ab0c-88888d93f7f5",
+        "timestamp": 1788017175797
+      }
+    ],
+    "3. Podłączenie kąta obrotu w pętli `_generate_complex`": [
+      {
+        "executionId": "5ad6388b-5924-46d6-92a0-f427c2f66c7c",
+        "chatSessionId": "sess_0f9953df-f52e-45c3-ab0c-88888d93f7f5",
+        "timestamp": 1788017110715
+      },
+      {
+        "executionId": "5ad6388b-5924-46d6-92a0-f427c2f66c7c",
+        "chatSessionId": "sess_0f9953df-f52e-45c3-ab0c-88888d93f7f5",
+        "timestamp": 1788017180136
+      }
+    ],
+    "4. Weryfikacja obrysów w `_process_connections`": [
+      {
+        "executionId": "5ad6388b-5924-46d6-92a0-f427c2f66c7c",
+        "chatSessionId": "sess_0f9953df-f52e-45c3-ab0c-88888d93f7f5",
+        "timestamp": 1788017187015
+      },
+      {
+        "executionId": "5ad6388b-5924-46d6-92a0-f427c2f66c7c",
+        "chatSessionId": "sess_0f9953df-f52e-45c3-ab0c-88888d93f7f5",
+        "timestamp": 1788017200903
+      }
+    ],
+    "5. Weryfikacja spójności rzutu 2D w `ModuleLayoutEditor.jsx`": [
+      {
+        "executionId": "5ad6388b-5924-46d6-92a0-f427c2f66c7c",
+        "chatSessionId": "sess_0f9953df-f52e-45c3-ab0c-88888d93f7f5",
+        "timestamp": 1788017206169
+      },
+      {
+        "executionId": "5ad6388b-5924-46d6-92a0-f427c2f66c7c",
+        "chatSessionId": "sess_0f9953df-f52e-45c3-ab0c-88888d93f7f5",
+        "timestamp": 1788017223745
+      }
+    ],
+    "6. Test obrotu ram i braku deformacji (API)": [
+      {
+        "executionId": "5ad6388b-5924-46d6-92a0-f427c2f66c7c",
+        "chatSessionId": "sess_0f9953df-f52e-45c3-ab0c-88888d93f7f5",
+        "timestamp": 1788017228987
+      },
+      {
+        "executionId": "5ad6388b-5924-46d6-92a0-f427c2f66c7c",
+        "chatSessionId": "sess_0f9953df-f52e-45c3-ab0c-88888d93f7f5",
+        "timestamp": 1788017816226
+      }
+    ],
+    "7. Test kompletności geometrii i regresji (API)": [
+      {
+        "executionId": "5ad6388b-5924-46d6-92a0-f427c2f66c7c",
+        "chatSessionId": "sess_0f9953df-f52e-45c3-ab0c-88888d93f7f5",
+        "timestamp": 1788017822110
+      },
+      {
+        "executionId": "5ad6388b-5924-46d6-92a0-f427c2f66c7c",
+        "chatSessionId": "sess_0f9953df-f52e-45c3-ab0c-88888d93f7f5",
+        "timestamp": 1788018434364
+      }
+    ],
+    "8. Test styków między modułami obróconymi (API)": [
+      {
+        "executionId": "5ad6388b-5924-46d6-92a0-f427c2f66c7c",
+        "chatSessionId": "sess_0f9953df-f52e-45c3-ab0c-88888d93f7f5",
+        "timestamp": 1788018439012
+      },
+      {
+        "executionId": "5ad6388b-5924-46d6-92a0-f427c2f66c7c",
+        "chatSessionId": "sess_0f9953df-f52e-45c3-ab0c-88888d93f7f5",
+        "timestamp": 1788019490513
+      }
+    ],
+    "9. Weryfikacja końcowa parsowania i działania": [
+      {
+        "executionId": "5ad6388b-5924-46d6-92a0-f427c2f66c7c",
+        "chatSessionId": "sess_0f9953df-f52e-45c3-ab0c-88888d93f7f5",
+        "timestamp": 1788019495146
+      },
+      {
+        "executionId": "5ad6388b-5924-46d6-92a0-f427c2f66c7c",
+        "chatSessionId": "sess_0f9953df-f52e-45c3-ab0c-88888d93f7f5",
+        "timestamp": 1788019553683
+      }
+    ]
+  }
+}
