@@ -183,7 +183,10 @@ class RoofFactory:
                     elements.append(Component3D(type="drainage_inlet", position=[inlet_x, top_y + 0.15, inlet_z], rotation=[0, 0, 0], scale=[0.4, 0.3, 0.4]))
 
             # 2. Tworzenie "kopert" ze spadkami
-            panel_xs = [-ext_roof_half_width] + [x for x in xs if -ext_roof_half_width < x < ext_roof_half_width] + [ext_roof_half_width]
+            # Dach podcisnieniowy jest ograniczony attykami ze wszystkich stron
+            # (brak okapu) - pokrycie konczy sie na obrysie hali (+/- half_width),
+            # a nie na wysunietym licu jak przy dachu grawitacyjnym z rynnami.
+            panel_xs = [-half_width] + [x for x in xs if -half_width < x < half_width] + [half_width]
             panel_xs = sorted(list(set(panel_xs)))
 
             for i in range(grid.num_frames - 1):

@@ -9,6 +9,7 @@ Integruje FireSafetyManager do przypisywania wymogów PPOŻ.
 import math
 from models import HallParameters, Component3D, BlockDefinition
 from core.grid_system import GridSystem3D
+from core.defaults import DEFAULTS
 from core.fire_safety import FireSafetyManager
 from .column_factory import ColumnFactory
 from .roof_factory import RoofFactory
@@ -361,8 +362,9 @@ class HallGenerator:
             ba = block_bounds[bid_a]
             bb = block_bounds[bid_b]
 
-            # Usuwamy sciany tylko przy expansion_joint i none
-            if conn_type not in ('expansion_joint', 'none'):
+            # Usuwamy/przetwarzamy sciany przy dylatacji, scaleniu oraz
+            # scianach wewnetrznych/ppoz (usuwanie zdublowanej obudowy na styku)
+            if conn_type not in ('expansion_joint', 'none', 'internal_wall', 'fire_wall'):
                 continue
 
             tolerance = 0.5
@@ -400,73 +402,292 @@ class HallGenerator:
         if not remove_zones:
             return components
 
-        # Filtruj/przycinaj elementy scian na stykach
+        # Filtruj/przycinaj elementy scian na stykach.
+        # Zamiast usuwac CALY panel wg pozycji srodka, przycinamy panel POZIOMO
+        # (wzdluz osi styku) do czesci lezacej POZA overlapem. Dzieki temu przy
+        # przesunieciu o pol nawy nie powstaja dziury (usuniety caly panel) ani
+        # podwojne sciany (pozostawiony caly panel).
         wall_types = {'sandwich_panel', 'plinth', 'girt'}
+        MIN_SEG = 0.3  # minimalna dlugosc fragmentu panelu
+
+        def _mk_segment(c_src, axis, seg_center, seg_len, new_py=None, new_sy=None):
+            """Tworzy nowy Component3D bedacy fragmentem panelu c_src.
+
+            Fragment jest przyciety wzdluz osi styku (axis) do [seg_center +/- seg_len/2].
+            new_py/new_sy pozwalaja opcjonalnie przyciac pionowo (attyka).
+            """
+            sx, sy0, sz = c_src.scale
+            px0, py0, pz0 = c_src.position
+            out_py = py0 if new_py is None else new_py
+            out_sy = sy0 if new_sy is None else new_sy
+            if axis == 'x':
+                # panel biegnie wzdluz Z: dlugosc = scale[2], srodek = pz
+                out_pos = [round(px0, 6), round(out_py, 6), round(seg_center, 6)]
+                out_scale = [round(sx, 6), round(out_sy, 6), round(seg_len, 6)]
+            else:
+                # panel biegnie wzdluz X: dlugosc = scale[0], srodek = px
+                out_pos = [round(seg_center, 6), round(out_py, 6), round(pz0, 6)]
+                out_scale = [round(seg_len, 6), round(out_sy, 6), round(sz, 6)]
+            new_meta = dict(c_src.meta) if c_src.meta else {}
+            new_meta["merge_trim"] = "1"
+            return Component3D(
+                type=c_src.type,
+                position=out_pos,
+                rotation=c_src.rotation,
+                scale=out_scale,
+                meta=new_meta,
+            )
+
         filtered = []
         for c in components:
-            action = 'keep'
-            trim_y_min = None
-            if c.type in wall_types:
-                px, py, pz = c.position
-                sy = c.scale[1] if len(c.scale) > 1 else 1.0
-                panel_top = py + sy / 2
-                block_id = c.meta.get("block_id", "") if c.meta else ""
-
-                for zone in remove_zones:
-                    (axis, coord, rng_min, rng_max, ctype,
-                     h_a, h_b, bid_a, bid_b) = zone
-                    lower_h = min(h_a, h_b)
-                    higher_h = max(h_a, h_b)
-                    # Okresl czy panel nalezy do wyzszego czy nizszego modulu
-                    is_higher = ((block_id == bid_a and h_a >= h_b) or
-                                 (block_id == bid_b and h_b >= h_a))
-
-                    in_zone = False
-                    if axis == 'x':
-                        in_zone = (abs(px - coord) < 2.0 and
-                                   rng_min - 1 < pz < rng_max + 1)
-                    else:
-                        in_zone = (abs(pz - coord) < 2.0 and
-                                   rng_min - 1 < px < rng_max + 1)
-
-                    if in_zone and (block_id == bid_a or block_id == bid_b):
-                        if lower_h >= higher_h - 0.5:
-                            # Obie hale o tej samej wysokosci -> usun w calosci
-                            action = 'remove'
-                        elif is_higher:
-                            # Panel wyzszego modulu: przytnij do attyki (powyzej lower_h)
-                            if panel_top <= lower_h + 0.3:
-                                action = 'remove'
-                            else:
-                                action = 'trim'
-                                trim_y_min = lower_h
-                        else:
-                            # Panel nizszego modulu: usun w calosci
-                            action = 'remove'
-                        break
-
-            if action == 'remove':
-                continue
-            elif action == 'trim' and trim_y_min is not None:
-                sx, sy_orig, sz = c.scale
-                py_orig = c.position[1]
-                panel_top = py_orig + sy_orig / 2
-                new_sy = panel_top - trim_y_min
-                if new_sy < 0.3:
-                    continue
-                new_py = trim_y_min + new_sy / 2
-                trimmed = Component3D(
-                    type=c.type,
-                    position=[c.position[0], new_py, c.position[2]],
-                    rotation=c.rotation,
-                    scale=[sx, new_sy, sz],
-                    meta=c.meta,
-                )
-                filtered.append(trimmed)
-            else:
+            if c.type not in wall_types:
                 filtered.append(c)
+                continue
 
-        return filtered
+            px, py, pz = c.position
+            sx, sy, sz = c.scale
+            block_id = c.meta.get("block_id", "") if c.meta else ""
+
+            # Znajdz strefe styku, na ktorej lezy ten panel (os prostopadla).
+            matched_zone = None
+            for zone in remove_zones:
+                (axis, coord, rng_min, rng_max, ctype,
+                 h_a, h_b, bid_a, bid_b) = zone
+                if block_id != bid_a and block_id != bid_b:
+                    continue
+                if axis == 'x':
+                    on_line = abs(px - coord) < 2.0
+                    # panel musi w ogole zahaczac o overlap wzdluz Z
+                    p_lo, p_hi = pz - sz / 2, pz + sz / 2
+                else:
+                    on_line = abs(pz - coord) < 2.0
+                    p_lo, p_hi = px - sx / 2, px + sx / 2
+                overlaps = (p_hi > rng_min and p_lo < rng_max)
+                if on_line and overlaps:
+                    matched_zone = zone
+                    break
+
+            if matched_zone is None:
+                # Panel poza strefami styku (lub nie zahacza o overlap) -> bez zmian
+                filtered.append(c)
+                continue
+
+            (axis, coord, rng_min, rng_max, ctype,
+             h_a, h_b, bid_a, bid_b) = matched_zone
+            lower_h = min(h_a, h_b)
+            higher_h = max(h_a, h_b)
+            same_height = lower_h >= higher_h - 0.5
+            is_higher = ((block_id == bid_a and h_a >= h_b) or
+                         (block_id == bid_b and h_b >= h_a))
+
+            # Zakres panelu wzdluz osi styku
+            if axis == 'x':
+                p_lo, p_hi = pz - sz / 2, pz + sz / 2
+            else:
+                p_lo, p_hi = px - sx / 2, px + sx / 2
+
+            panel_top = py + sy / 2
+
+            # --- Czesc PONIZEJ rng_min (segment lewy, POZA overlapem) ---
+            if p_lo < rng_min - 1e-9:
+                seg_lo, seg_hi = p_lo, min(p_hi, rng_min)
+                seg_len = seg_hi - seg_lo
+                if seg_len >= MIN_SEG:
+                    filtered.append(_mk_segment(c, axis, (seg_lo + seg_hi) / 2, seg_len))
+
+            # --- Czesc POWYZEJ rng_max (segment prawy, POZA overlapem) ---
+            if p_hi > rng_max + 1e-9:
+                seg_lo, seg_hi = max(p_lo, rng_max), p_hi
+                seg_len = seg_hi - seg_lo
+                if seg_len >= MIN_SEG:
+                    filtered.append(_mk_segment(c, axis, (seg_lo + seg_hi) / 2, seg_len))
+
+            # --- Czesc W overlapie (miedzy rng_min a rng_max) ---
+            mid_lo, mid_hi = max(p_lo, rng_min), min(p_hi, rng_max)
+            mid_len = mid_hi - mid_lo
+            if mid_len >= MIN_SEG:
+                if ctype == 'internal_wall':
+                    # Sciana wewnetrzna: obudowa w overlapie zostaje TYLKO dla
+                    # jednego modulu (bid_a). Dla modulu B usuwamy (nie dublujemy).
+                    if block_id == bid_a:
+                        seg = _mk_segment(c, axis, (mid_lo + mid_hi) / 2, mid_len)
+                        if seg.meta is None:
+                            seg.meta = {}
+                        seg.meta["connection_wall"] = "internal"
+                        filtered.append(seg)
+                    # block_id == bid_b -> czesc w overlapie znika
+                elif ctype == 'fire_wall':
+                    # Sciana ppoz: obudowa w overlapie usunieta dla OBU modulow,
+                    # bo w tym miejscu stanie dedykowana sciana ppoz (FAZA 3).
+                    pass
+                else:
+                    # ctype 'none' / 'expansion_joint' -> zachowanie jak dotychczas
+                    if same_height:
+                        # Ta sama wysokosc -> wnetrze scalone, czesc w overlapie znika
+                        pass
+                    elif is_higher:
+                        # Panel wyzszego modulu: przytnij pionowo do attyki (powyzej lower_h)
+                        if panel_top > lower_h + 0.3:
+                            new_sy = panel_top - lower_h
+                            new_py = lower_h + new_sy / 2
+                            filtered.append(_mk_segment(
+                                c, axis, (mid_lo + mid_hi) / 2, mid_len,
+                                new_py=new_py, new_sy=new_sy,
+                            ))
+                        # else: panel calkowicie ponizej attyki -> znika
+                    else:
+                        # Panel nizszego modulu: czesc w overlapie znika
+                        pass
+
+        # --- FAZA 3: DEDYKOWANE SCIANY PPOZ / OSLONOWE NA STYKACH ---
+        # Dla fire_wall generujemy dedykowana sciane ppoz na odcinku overlapu
+        # (od fundamentu ponad dach wyzszego modulu) plus ewentualna oslone
+        # z plyty warstwowej pokrywajaca roznice wysokosci. Dla internal_wall
+        # nic nie generujemy — obudowa modulu A (pozostawiona wyzej) pelni role
+        # sciany wewnetrznej.
+        special_walls = self._build_connection_walls(remove_zones, block_bounds)
+
+        # --- FAZA 2: SCALENIE (none) — usun zdublowany rzad slupow i fundamentow ---
+        # Przy polaczeniu "none" obie hale maja wlasny rzad slupow na styku.
+        # Aby powstala jedna przestrzen (ksztalt L/T/U), usuwamy rzad modulu B
+        # (wyzszy indeks w polaczeniu), zostawiajac wspolny rzad modulu A.
+        merge_zones = []  # (axis, coord, rng_min, rng_max, bid_loser)
+        for zone in remove_zones:
+            (axis, coord, rng_min, rng_max, ctype,
+             h_a, h_b, bid_a, bid_b) = zone
+            if ctype == "none":
+                merge_zones.append((axis, coord, rng_min, rng_max, bid_b))
+
+        if not merge_zones:
+            filtered.extend(special_walls)
+            return filtered
+
+        STRUCT_TYPES = {"column", "column_gable", "foundation"}
+        tol_col = 0.6
+        result = []
+        for c in filtered:
+            drop = False
+            if c.type in STRUCT_TYPES:
+                bid = c.meta.get("block_id", "") if c.meta else ""
+                px, py, pz = c.position
+                for (axis, coord, rng_min, rng_max, bid_loser) in merge_zones:
+                    if bid != bid_loser:
+                        continue
+                    if axis == "x":
+                        on_line = abs(px - coord) < tol_col
+                        in_overlap = (rng_min - 0.5) <= pz <= (rng_max + 0.5)
+                    else:
+                        on_line = abs(pz - coord) < tol_col
+                        in_overlap = (rng_min - 0.5) <= px <= (rng_max + 0.5)
+                    if on_line and in_overlap:
+                        drop = True
+                        break
+            if not drop:
+                result.append(c)
+
+        result.extend(special_walls)
+        return result
+
+    def _build_connection_walls(self, remove_zones, block_bounds) -> list[Component3D]:
+        """
+        Generuje dedykowane sciany na stykach modulow:
+        - fire_wall: sciana ppoz (REI120) od fundamentu ponad dach wyzszego
+          modulu, plus oslona z plyty warstwowej na roznicy wysokosci.
+        - internal_wall: pomijane (obudowa modulu A pelni role sciany).
+        """
+        params = self.params
+        walls: list[Component3D] = []
+
+        for zone in remove_zones:
+            (axis, coord, rng_min, rng_max, ctype,
+             h_a, h_b, bid_a, bid_b) = zone
+
+            if ctype != 'fire_wall':
+                continue
+
+            seg_len = rng_max - rng_min
+            if seg_len < 0.3:
+                continue
+
+            lower_h = min(h_a, h_b)
+            higher_h = max(h_a, h_b)
+            seg_center = (rng_min + rng_max) / 2.0
+
+            # --- Sciana PPOZ: od fundamentu do 0.3m ponad dach wyzszego modulu ---
+            t_fw = 0.24
+            wall_top = higher_h + params.truss_depth + 0.3
+            wall_base = -params.foundation_depth
+            wall_h = wall_top - wall_base
+            wall_center_y = wall_base + wall_h / 2.0
+
+            if axis == 'x':
+                fw_position = [round(coord, 6), round(wall_center_y, 6), round(seg_center, 6)]
+                fw_scale = [round(t_fw, 6), round(wall_h, 6), round(seg_len, 6)]
+            else:
+                fw_position = [round(seg_center, 6), round(wall_center_y, 6), round(coord, 6)]
+                fw_scale = [round(seg_len, 6), round(wall_h, 6), round(t_fw, 6)]
+
+            walls.append(Component3D(
+                type="fire_wall",
+                position=fw_position,
+                rotation=[0.0, 0.0, 0.0],
+                scale=fw_scale,
+                meta={
+                    "element_type": "fire_separation_wall",
+                    "connection": "module_joint",
+                    "fire_rating": "REI120",
+                    "block_id": bid_a,
+                },
+            ))
+
+            # --- Oslona z plyty warstwowej na roznicy wysokosci ---
+            # Ppoz nie izoluje, wiec pas miedzy pokryciem nizszego a wyzszego
+            # modulu zamykamy plyta warstwowa.
+            if higher_h - lower_h > 0.5:
+                cladding_h = higher_h - lower_h
+                if cladding_h > 0.3:
+                    t = params.cladding_thickness
+                    band_base = lower_h + params.truss_depth
+                    center_y = band_base + cladding_h / 2.0
+
+                    # --- Wysuniecie oslony na lico zewnetrznej elewacji wyzszego modulu ---
+                    # Oslona nie moze chowac sie w grubosci sciany ppoz (osi styku).
+                    # Przesuwamy ja na lico obudowy zewnetrznej elewacji wyzszego
+                    # modulu, po stronie NIZSZEGO modulu (tam elewacja wyzszego
+                    # jest widoczna nad dachem nizszego).
+                    # Offset lica = col_width/2 + grubosc obudowy (jak w roof_factory:
+                    # ext_roof_half_width = half_width + col_w/2 + wall_t).
+                    face_offset = DEFAULTS.col_width / 2.0 + params.cladding_thickness
+                    higher_bid = bid_a if h_a >= h_b else bid_b
+                    if axis == 'x':
+                        higher_center = block_bounds[higher_bid]['px']
+                    else:
+                        higher_center = block_bounds[higher_bid]['pz']
+                    # Kierunek na zewnatrz (strona nizszego modulu) = przeciwny do
+                    # srodka wyzszego modulu wzgledem osi styku.
+                    sign = 1.0 if higher_center < coord else -1.0
+                    face_coord = coord + sign * face_offset
+
+                    if axis == 'x':
+                        cl_position = [round(face_coord, 6), round(center_y, 6), round(seg_center, 6)]
+                        cl_scale = [round(t, 6), round(cladding_h, 6), round(seg_len, 6)]
+                    else:
+                        cl_position = [round(seg_center, 6), round(center_y, 6), round(face_coord, 6)]
+                        cl_scale = [round(seg_len, 6), round(cladding_h, 6), round(t, 6)]
+
+                    walls.append(Component3D(
+                        type="sandwich_panel",
+                        position=cl_position,
+                        rotation=[0.0, 0.0, 0.0],
+                        scale=cl_scale,
+                        meta={
+                            "block_id": bid_a,
+                            "element_type": "fire_wall_cladding",
+                            "connection": "module_joint",
+                        },
+                    ))
+
+        return walls
 
     def _apply_fire_safety(self, components: list[Component3D], grid: GridSystem3D) -> list[Component3D]:
         """

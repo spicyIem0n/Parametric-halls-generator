@@ -61,7 +61,7 @@ const ConnectionsPanel = ({ blocks, connections, onChange }) => {
                 onChange(newConns);
               }} className="w-full p-0.5 border rounded text-[8px] mb-1">
               <option value="expansion_joint">Dylatacja (bez ściany wewn.)</option>
-              {!perpendicular && <option value="none">Bez ściany (scalone)</option>}
+              {!perpendicular && <option value="none">Bez ściany (scal w jedną przestrzeń)</option>}
               <option value="internal_wall">Ściana wewn. (bez odporności ogn.)</option>
               <option value="fire_wall">Ściana PPOŻ</option>
             </select>
@@ -81,7 +81,7 @@ const ConnectionsPanel = ({ blocks, connections, onChange }) => {
               {conn.type === 'expansion_joint' && (hasHeightDiff
                 ? '⚡ Dylatacja: brak ściany wewnątrz, ściana zamykająca nad niższym dachem (attyka)'
                 : '⚡ Dylatacja: brak ściany wewnątrz budynku, podwójne słupy')}
-              {conn.type === 'none' && '→ Moduły scalone: wspólna przestrzeń, brak ściany'}
+              {conn.type === 'none' && '→ Scalone w jedną przestrzeń: usuwa ściany i zdublowany rząd słupów na styku (kształt L/T/U)'}
               {conn.type === 'internal_wall' && '→ Ściana działowa bez odporności ogniowej'}
               {conn.type === 'fire_wall' && `→ Ściana PPOŻ ${conn.rei_class || 'REI60'} wystająca ≥0.3m ponad dach`}
             </p>

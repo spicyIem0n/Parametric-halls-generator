@@ -59,6 +59,7 @@ class TakeoffCalculator:
             "dock_doors": 0, "gate_doors": 0, "dock_shelters": 0,
             "skylights": 0, "smoke_vents": 0, "light_strip_m2": 0.0,
             "firewall_m2": 0.0,
+            "internal_wall_m2": 0.0,
             "bracing_mb": 0.0,
             "techroom_m2": 0.0, "techroom_doors": 0,
             "office_m2": 0.0, "office_cols": 0, "office_stairs": 0,
@@ -78,7 +79,16 @@ class TakeoffCalculator:
             elif t == "roof_panel":
                 a["roof_cover_m2"] += s[0] * s[2]
             elif t == "sandwich_panel":
-                a["cladding_m2"] += _area_plate(s)
+                meta = c.meta or {}
+                if meta.get("connection_wall") == "internal":
+                    # Obudowa pozostawiona na styku jako sciana wewnetrzna
+                    a["internal_wall_m2"] += _area_plate(s)
+                elif meta.get("element_type") == "fire_wall_cladding":
+                    # Oslona z plyty warstwowej pokrywajaca roznice wysokosci
+                    # przy scianie ppoz -> doliczamy do ppoz
+                    a["firewall_m2"] += _area_plate(s)
+                else:
+                    a["cladding_m2"] += _area_plate(s)
             elif t == "floor_slab":
                 a["floor_m2"] += s[0] * s[2]
             elif t.startswith("floor_base_"):
@@ -192,6 +202,8 @@ class TakeoffCalculator:
         add_pair("Pasmo świetlne", "m²", a["light_strip_m2"], "m²", a["light_strip_m2"])
         # Sciany PPOZ
         add_pair("Ściana PPOŻ", "m²", a["firewall_m2"], "m²", a["firewall_m2"])
+        # Sciany wewnetrzne (obudowa na styku modulow)
+        add_pair("Ściana wewnętrzna", "m²", a["internal_wall_m2"], "m²", a["internal_wall_m2"])
         # Stezenia
         add_pair("Stężenia ścienne", "mb", a["bracing_mb"], "mb", a["bracing_mb"])
         # Wpusty dachowe
