@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import Controls from './components/Controls';
 import Scene3D from './components/Scene3D';
-import { generateHallParameters, validateHall } from './api';
+import QuantityTakeoffView from './components/QuantityTakeoffView';
+import { generateHallParameters, validateHall, getQuantityTakeoff, exportTakeoff } from './api';
 
 // Baza danych płyt warstwowych oparta na oficjalnym katalogu Ruukki
 export const RUUKKI_CATALOG = {
@@ -55,6 +56,9 @@ const App = () => {
   const [components, setComponents] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [validation, setValidation] = useState(null);
+  const [takeoff, setTakeoff] = useState([]);
+  const [activeView, setActiveView] = useState('3d'); // '3d' | 'takeoff'
+  const [lastApiParams, setLastApiParams] = useState(null);
 
   // Funkcja aktualizująca grubość panelu do API po wybraniu go z katalogu
   const handlePanelChange = (panelId) => {
@@ -73,7 +77,15 @@ const App = () => {
     // Walidacja modelu
     const validationResult = await validateHall(apiParams);
     setValidation(validationResult);
+    // Przedmiar ilościowy
+    const takeoffResult = await getQuantityTakeoff(apiParams);
+    setTakeoff(takeoffResult && takeoffResult.items ? takeoffResult.items : []);
+    setLastApiParams(apiParams);
     setIsLoading(false);
+  };
+
+  const handleExportTakeoff = () => {
+    if (lastApiParams) exportTakeoff(lastApiParams);
   };
 
   useEffect(() => { handleGenerate(); }, []);
@@ -81,7 +93,27 @@ const App = () => {
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-gray-100 font-sans">
       <Controls params={params} setParams={setParams} onGenerate={handleGenerate} isLoading={isLoading} onPanelChange={handlePanelChange} catalog={RUUKKI_CATALOG} roofSheetCatalog={ROOF_SHEET_CATALOG} validation={validation} />
-      <Scene3D components={components} />
+      <div className="flex-1 h-full flex flex-col relative">
+        {/* Przełącznik widoku 3D / Przedmiar */}
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 flex bg-white rounded-lg shadow-md border border-gray-200 p-1">
+          {[
+            { key: '3d', label: 'Model 3D' },
+            { key: 'takeoff', label: 'Przedmiar' },
+          ].map(v => (
+            <button key={v.key} onClick={() => setActiveView(v.key)}
+              className={`px-4 py-1.5 text-[11px] font-bold rounded uppercase tracking-wide transition-colors ${activeView === v.key ? 'bg-blue-600 text-white' : 'text-gray-500 hover:bg-gray-100'}`}>
+              {v.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex-1 h-full" style={{ display: activeView === '3d' ? 'block' : 'none' }}>
+          <Scene3D components={components} />
+        </div>
+        <div className="flex-1 h-full" style={{ display: activeView === 'takeoff' ? 'flex' : 'none' }}>
+          <QuantityTakeoffView items={takeoff} onExport={handleExportTakeoff} />
+        </div>
+      </div>
     </div>
   );
 };

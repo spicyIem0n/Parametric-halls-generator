@@ -1,9 +1,12 @@
+import io
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from models import HallParameters
 from generators.hall_generator import HallGenerator
 from core.grid_system import GridSystem3D
 from core.clash_detector import ClashDetector
+from core.takeoff_calculator import TakeoffCalculator
 
 app = FastAPI(title="Parametric Hall API")
 
@@ -75,6 +78,74 @@ def validate_hall(params: HallParameters):
     result = detector.validate()
 
     return result.to_dict()
+
+
+@app.post("/quantity-takeoff")
+def quantity_takeoff(params: HallParameters):
+    """Zwraca przedmiar ilosciowy (lista pozycji) na podstawie modelu."""
+    return {"items": TakeoffCalculator.compute(params)}
+
+
+@app.post("/quantity-takeoff/export")
+def quantity_takeoff_export(params: HallParameters):
+    """Eksportuje przedmiar do pliku Excel (.xlsx)."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+
+    items = TakeoffCalculator.compute(params)
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Przedmiar"
+
+    headers = ["L.p.", "Opis pozycji", "Jednostka miary", "Ilość",
+               "Cena jednostkowa", "Wartość", "Uwagi"]
+
+    header_font = Font(bold=True, color="FFFFFF", size=10)
+    header_fill = PatternFill(start_color="1E3A8A", end_color="1E3A8A", fill_type="solid")
+    center = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    left = Alignment(horizontal="left", vertical="center", wrap_text=True)
+    thin = Side(style="thin", color="CBD5E1")
+    border = Border(left=thin, right=thin, top=thin, bottom=thin)
+
+    for col, h in enumerate(headers, start=1):
+        cell = ws.cell(row=1, column=1 + col - 1, value=h)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = center
+        cell.border = border
+
+    for r, it in enumerate(items, start=2):
+        row_vals = [
+            it["lp"], it["opis"], it["jednostka"], it["ilosc"],
+            it["cena_jedn"], it["wartosc"], it["uwagi"],
+        ]
+        for c, val in enumerate(row_vals, start=1):
+            cell = ws.cell(row=r, column=c, value=val)
+            cell.border = border
+            if c in (1, 3, 4, 5, 6):
+                cell.alignment = center
+            else:
+                cell.alignment = left
+
+    # Szerokosci kolumn
+    widths = [6, 42, 14, 12, 16, 14, 26]
+    from openpyxl.utils import get_column_letter
+    for i, w in enumerate(widths, start=1):
+        ws.column_dimensions[get_column_letter(i)].width = w
+
+    ws.freeze_panes = "A2"
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+
+    fname = f"przedmiar_hala_{int(params.width)}x{int(params.length)}.xlsx"
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )
 
 
 # Aby uruchomić: uvicorn main:app --reload
