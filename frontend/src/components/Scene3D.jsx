@@ -1,6 +1,93 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Grid, Sky } from '@react-three/drei';
+import * as THREE from 'three';
+
+// Standardowa szerokosc plyty warstwowej sciennej (spoiny co 1.0 m)
+const PANEL_MODULE = 1.0;
+
+// Rysuje spoiny miedzy plytami warstwowymi na elewacji (na obu licach panelu).
+// - orientation "horizontal": plyty ukladane poziomo -> spoiny POZIOME
+//   (linie biegnace wzdluz osi poziomej, rozstawione po wysokosci).
+// - orientation "vertical": plyty ukladane pionowo -> spoiny PIONOWE
+//   (linie biegnace wzdluz osi pionowej, rozstawione po osi poziomej).
+// Panel to boks lokalny 1x1x1 skalowany przez `scale`; os grubosci to
+// najmniejsza skladowa scale, os pionowa lica to Y (indeks 1).
+const PanelSeams = ({ scale, orientation = 'horizontal', color = '#64748b' }) => {
+  const geometry = useMemo(() => {
+    const dims = [Math.abs(scale[0]), Math.abs(scale[1]), Math.abs(scale[2])];
+    const thickAxis = dims.indexOf(Math.min(...dims));
+    const planeAxes = [0, 1, 2].filter((a) => a !== thickAxis);
+
+    // Os pionowa lica = Y (1), jesli lezy w plaszczyznie lica; os pozioma to druga.
+    let vertAxis = planeAxes.includes(1) ? 1 : planeAxes[1];
+    let horizAxis = planeAxes.find((a) => a !== vertAxis);
+
+    const faceOffset = 0.5; // polowa grubosci w jednostkach lokalnych
+    const positions = [];
+
+    const makePoint = (along, at, faceSign) => {
+      // `at` — wspolrzedna lokalna na osi rozstawu; `along` — wzdluz drugiej osi
+      const p = [0, 0, 0];
+      p[thickAxis] = faceSign * faceOffset;
+      return { p, along, at };
+    };
+
+    // Zwraca lokalne wspolrzedne [-0.5,0.5] spoin rozstawionych co PANEL_MODULE
+    // wzdluz osi o rzeczywistej dlugosci realLen (pomija krawedzie).
+    const seamCoords = (realLen) => {
+      const out = [];
+      const n = Math.floor(realLen / PANEL_MODULE + 1e-6);
+      for (let i = 1; i <= n; i++) {
+        const d = i * PANEL_MODULE;
+        if (d >= realLen - 1e-6) break;
+        out.push(d / realLen - 0.5);
+      }
+      return out;
+    };
+
+    // Dodaje linie na obu licach; spoiny rozstawione wzdluz `spacingAxis`,
+    // a kazda linia biegnie wzdluz `runAxis` (przez cala szerokosc lica).
+    const addSeams = (spacingAxis, runAxis) => {
+      const coords = seamCoords(dims[spacingAxis]);
+      for (const faceSign of [1, -1]) {
+        for (const c of coords) {
+          const a = [0, 0, 0];
+          const b = [0, 0, 0];
+          a[thickAxis] = faceSign * faceOffset;
+          b[thickAxis] = faceSign * faceOffset;
+          a[spacingAxis] = c;
+          b[spacingAxis] = c;
+          a[runAxis] = -0.5;
+          b[runAxis] = 0.5;
+          positions.push(...a, ...b);
+        }
+      }
+    };
+
+    if (orientation === 'vertical') {
+      // spoiny pionowe: rozstawione po osi poziomej, linie biegna pionowo (Y)
+      addSeams(horizAxis, vertAxis);
+    } else {
+      // spoiny poziome: rozstawione po wysokosci (Y), linie biegna poziomo
+      addSeams(vertAxis, horizAxis);
+    }
+
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    return geo;
+  }, [scale, orientation]);
+
+  if (!geometry.attributes.position || geometry.attributes.position.count === 0) {
+    return null;
+  }
+
+  return (
+    <lineSegments geometry={geometry}>
+      <lineBasicMaterial color={color} transparent opacity={0.55} />
+    </lineSegments>
+  );
+};
 
 // Funkcja pomocnicza do mapowania typów na kategorie widoczności
 const getCategory = (type) => {
@@ -122,10 +209,18 @@ const HallElement = ({ type, position, rotation, scale, meta, visibilities, plan
     metalness = 0.6;
   }
 
+  // Spoiny miedzy plytami warstwowymi TYLKO na elewacji (obudowa scienna).
+  // Dach pozostaje bez podzialow. Kierunek spoin wg orientacji montazu.
+  const showSeams = type === 'sandwich_panel' || type === 'sandwich_panel_v';
+  const seamOrientation =
+    (meta && meta.cladding_orientation) ||
+    (type === 'sandwich_panel_v' ? 'vertical' : 'horizontal');
+
   return (
     <mesh position={position} rotation={rotation} scale={scale}>
       <boxGeometry args={[1, 1, 1]} />
       <meshStandardMaterial color={color} roughness={roughness} metalness={metalness} transparent={transparent} opacity={opacity} />
+      {showSeams && <PanelSeams scale={scale} orientation={seamOrientation} color="#64748b" />}
     </mesh>
   );
 };

@@ -9,3 +9,4 @@ export { default as TechnicalRoomsSection } from './TechnicalRoomsSection';
 export { default as ExternalOfficesSection } from './ExternalOfficesSection';
 export { default as InternalOfficesSection } from './InternalOfficesSection';
 export { default as ReserveZonesSection } from './ReserveZonesSection';
+export { default as ClimateLoadsSection } from './ClimateLoadsSection';

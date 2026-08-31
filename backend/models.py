@@ -91,6 +91,14 @@ class BlockDefinition(BaseModel):
     drainage_zones_x: int = 2
     drainage_zones_z: int = 4
     roof_slope_percent: float = 2.0
+    # Izolacja dachu (katalog z pliku Excel — patrz core/insulation_catalog.py)
+    roof_thermal_insulation_enabled: bool = False
+    roof_thermal_insulation_id: str = ""
+    roof_waterproofing_enabled: bool = False
+    roof_waterproofing_id: str = ""
+    # Zebranie obciążeń dachu — dane per modul (patrz core/roof_load_calculator.py)
+    roof_suspended_load: float = 0.15   # obciążenie stałe dodatkowe: sufit podwieszony/instalacje [kN/m²]
+    roof_use_category: str = "H"        # kategoria użytkowa dachu wg PN-EN 1991-1-1 (domyślnie H — niedostępny)
     # Konstrukcja
     column_method: str = "default"
     manual_column_sections: Dict[str, List[float]] = {
@@ -263,7 +271,32 @@ class HallParameters(BaseModel):
     roof_slope_percent: float = 2.0
     truss_depth: float = 0.6
     purlin_spacing: float = 2.0
+    roof_sheet_id: str = "T85_08"
     roof_panel_thickness: float = 0.15
+    # Izolacja dachu (katalog z pliku Excel — patrz core/insulation_catalog.py)
+    roof_thermal_insulation_enabled: bool = False
+    roof_thermal_insulation_id: str = ""
+    roof_waterproofing_enabled: bool = False
+    roof_waterproofing_id: str = ""
+    # Zebranie obciążeń dachu — dane per modul (patrz core/roof_load_calculator.py)
+    roof_suspended_load: float = 0.15   # obciążenie stałe dodatkowe: sufit podwieszony/instalacje [kN/m²]
+    roof_use_category: str = "H"        # kategoria użytkowa dachu wg PN-EN 1991-1-1 (domyślnie H — niedostępny)
+
+    # --- NOWE: Zebranie obciążeń — parametry lokalizacyjne (jedne na cały projekt) ---
+    # UWAGA: wartości strefowe (sk, vb0) są orientacyjne — do zweryfikowania z aktualnym
+    # załącznikiem krajowym normy przed wymiarowaniem konstrukcji (patrz core/roof_load_calculator.py)
+    snow_zone: int = 2                          # strefa śniegowa PL (1-5)
+    terrain_altitude_m: float = 100.0           # wysokość terenu [m n.p.m.] — wpływa na sk w strefach 1-2
+    snow_exposure: str = "normalna"             # "normalna" | "wietrzna" | "oslonieta" -> współczynnik Ce
+    snow_thermal_coefficient: float = 1.0       # współczynnik termiczny Ct
+    wind_zone: int = 1                          # strefa wiatrowa PL (1-3)
+    terrain_category: str = "II"                # kategoria terenu "0"|"I"|"II"|"III"|"IV"
+
+    # --- NOWE: Fundamenty — parametr geotechniczny (jeden na cały projekt) ---
+    # UWAGA: qdop jest wartością orientacyjną, jeśli nie nadpisana z dokumentacji
+    # geotechnicznej działki (patrz core/foundation_sizing_calculator.py)
+    qdop_kpa: float = 150.0                     # dopuszczalne obciążenie gruntu [kPa]
+    soil_type_id: str = ""                      # ID gruntu wybranego z katalogu (informacyjnie)
 
     # --- NOWE: Bezpieczeństwo pożarowe ---
     fire_load_qd: float = 500.0             # Obciążenie ogniowe [MJ/m²]

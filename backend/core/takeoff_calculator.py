@@ -10,6 +10,8 @@ from generators.hall_generator import HallGenerator
 # Wskazniki
 STEEL_ROOF_KG_PER_M2 = 12.0      # kg/m2 powierzchni hali (dzwigary+platwie+stezenia dachu)
 RYGLOWKA_KG_PER_SET = 400.0      # kg/komplet na 1 otwor (info pomocnicza)
+LEAN_CONCRETE_MARGIN = 0.2       # m — beton podkladowy wystaje o 20cm poza obrys stopy (z kazdej pary bokow)
+LEAN_CONCRETE_THICKNESS = 0.1    # m — grubosc warstwy chudego betonu
 
 # Typy pomijane w agregacji
 _SKIP_TYPES = {
@@ -51,6 +53,7 @@ class TakeoffCalculator:
         a = {
             "col_count": 0, "col_vol": 0.0,
             "found_vol": 0.0,
+            "lean_concrete_m3": 0.0,
             "roof_cover_m2": 0.0,
             "cladding_m2": 0.0,
             "floor_m2": 0.0,
@@ -76,6 +79,11 @@ class TakeoffCalculator:
                 a["col_vol"] += _vol(s)
             elif t == "foundation":
                 a["found_vol"] += _vol(s)
+                # Chudy beton pod stopa: powierzchnia podstawy stopy (szerokosc x dlugosc)
+                # powiekszona o 20cm z kazdej strony, warstwa 10cm
+                width = s[0] + LEAN_CONCRETE_MARGIN
+                length = s[2] + LEAN_CONCRETE_MARGIN
+                a["lean_concrete_m3"] += width * length * LEAN_CONCRETE_THICKNESS
             elif t == "roof_panel":
                 a["roof_cover_m2"] += s[0] * s[2]
             elif t == "sandwich_panel":
@@ -169,6 +177,9 @@ class TakeoffCalculator:
         add_pair("Słup prefabrykowany", "m³", a["col_vol"], "szt", a["col_count"])
         # Stopy fundamentowe: material m3, montaz m3
         add_pair("Stopa fundamentowa", "m³", a["found_vol"], "m³", a["found_vol"])
+        # Beton podkladowy (chudy beton) pod stopami fundamentowymi: material m3, montaz m3
+        add_pair("Beton podkładowy pod stopami fundamentowymi", "m³", a["lean_concrete_m3"], "m³", a["lean_concrete_m3"],
+                 uwagi="wymiary podstawy stopy +20cm, gr. 10cm")
         # Konstrukcja stalowa dachu: wskaznik 12 kg/m2
         steel = STEEL_ROOF_KG_PER_M2 * hall_area
         add_pair("Konstrukcja stalowa dachu", "kg", steel, "kg", steel,

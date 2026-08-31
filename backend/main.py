@@ -7,6 +7,10 @@ from generators.hall_generator import HallGenerator
 from core.grid_system import GridSystem3D
 from core.clash_detector import ClashDetector
 from core.takeoff_calculator import TakeoffCalculator
+from core.insulation_catalog import load_thermal_insulation_catalog, load_waterproofing_catalog
+from core.roof_load_calculator import RoofLoadCalculator
+from core.foundation_sizing_calculator import FoundationSizingCalculator
+from core.soil_catalog import load_soil_catalog
 
 app = FastAPI(title="Parametric Hall API")
 
@@ -78,6 +82,36 @@ def validate_hall(params: HallParameters):
     result = detector.validate()
 
     return result.to_dict()
+
+
+@app.get("/catalogs/roof-thermal-insulation")
+def roof_thermal_insulation_catalog():
+    """Katalog materiałów izolacji termicznej dachu (wczytywany z pliku Excel)."""
+    return {"items": load_thermal_insulation_catalog()}
+
+
+@app.get("/catalogs/roof-waterproofing")
+def roof_waterproofing_catalog():
+    """Katalog materiałów izolacji przeciwwodnej dachu (wczytywany z pliku Excel)."""
+    return {"items": load_waterproofing_catalog()}
+
+
+@app.post("/roof-loads")
+def roof_loads(params: HallParameters):
+    """Zebranie obciążeń dachu (wartości charakterystyczne) per moduł/hala."""
+    return RoofLoadCalculator.compute(params)
+
+
+@app.post("/foundation-sizing")
+def foundation_sizing(params: HallParameters):
+    """Automatyczny dobór gabarytów stóp fundamentowych (wartości orientacyjne)."""
+    return FoundationSizingCalculator.compute(params)
+
+
+@app.get("/catalogs/soil")
+def soil_catalog():
+    """Katalog typowych gruntów z orientacyjnym qdop (wczytywany z pliku Excel)."""
+    return {"items": load_soil_catalog()}
 
 
 @app.post("/quantity-takeoff")

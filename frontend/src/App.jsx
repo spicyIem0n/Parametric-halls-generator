@@ -2,7 +2,13 @@ import React, { useState, useEffect } from 'react';
 import Controls from './components/Controls';
 import Scene3D from './components/Scene3D';
 import QuantityTakeoffView from './components/QuantityTakeoffView';
-import { generateHallParameters, validateHall, getQuantityTakeoff, exportTakeoff } from './api';
+import RoofLoadsView from './components/RoofLoadsView';
+import FoundationSizingView from './components/FoundationSizingView';
+import {
+  generateHallParameters, validateHall, getQuantityTakeoff, exportTakeoff,
+  getRoofThermalInsulationCatalog, getRoofWaterproofingCatalog, getRoofLoads,
+  getFoundationSizing, getSoilCatalog,
+} from './api';
 
 // Baza danych płyt warstwowych oparta na oficjalnym katalogu Ruukki
 export const RUUKKI_CATALOG = {
@@ -29,7 +35,7 @@ const App = () => {
   const [params, setParams] = useState({
     hall_type: 'simple', length: 60, width: 30, clear_height: 8, number_of_aisles: 1, roof_angle: 5, bay_spacing: 6,
     floor_thickness: 0.2, floor_base_type: 'lean_concrete', floor_base_thickness: 0.15,
-   foundation_method: 'default', foundation_depth: 1.0, 
+   foundation_method: 'default', foundation_depth: 1.0,
     docks_config: {}, dock_foundation_depth: 1.2,
     dock_zone_enabled: false, dock_zone_side: "left", dock_zone_width: 12, dock_zone_aisles: 1,
     manual_sizes: { external_main: [2.5, 4.0, 0.45], external_corner: [2.5, 4.0, 0.45], external_intermediate_cladding: [1.5, 1.5, 0.40], internal_main: [2.5, 2.5, 0.45] },
@@ -40,6 +46,15 @@ const App = () => {
     roof_sheet_id: "T85_08", roof_sheet_height: 0.085,
     // NOWE: Parametry odwodnienia
     roof_drainage_type: 'vacuum', drainage_zones_x: 2, drainage_zones_z: 3, roof_slope_percent: 2.0,
+    // NOWE: Izolacja dachu (katalog z pliku Excel)
+    roof_thermal_insulation_enabled: false, roof_thermal_insulation_id: '',
+    roof_waterproofing_enabled: false, roof_waterproofing_id: '',
+    // NOWE: Zebranie obciążeń dachu — lokalizacja (globalne) i dane dodatkowe
+    snow_zone: 2, terrain_altitude_m: 100, snow_exposure: 'normalna', snow_thermal_coefficient: 1.0,
+    wind_zone: 1, terrain_category: 'II',
+    roof_suspended_load: 0.15, roof_use_category: 'H',
+    // NOWE: Fundamenty — parametr geotechniczny
+    qdop_kpa: 150, soil_type_id: '',
     // NOWE: Wielobryłowość
     blocks: [],
     // NOWE: PPOŻ
@@ -57,8 +72,14 @@ const App = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [validation, setValidation] = useState(null);
   const [takeoff, setTakeoff] = useState([]);
-  const [activeView, setActiveView] = useState('3d'); // '3d' | 'takeoff'
+  const [roofLoads, setRoofLoads] = useState({ blocks: [], assumptions: '' });
+  const [foundationSizing, setFoundationSizing] = useState({ blocks: [], qdop_kpa: null, assumptions: '' });
+  const [activeView, setActiveView] = useState('3d'); // '3d' | 'takeoff' | 'loads' | 'foundations'
   const [lastApiParams, setLastApiParams] = useState(null);
+  // Katalogi izolacji dachu i gruntów wczytywane z pliku Excel (backend)
+  const [thermalInsulationCatalog, setThermalInsulationCatalog] = useState([]);
+  const [waterproofingCatalog, setWaterproofingCatalog] = useState([]);
+  const [soilCatalog, setSoilCatalog] = useState([]);
 
   // Funkcja aktualizująca grubość panelu do API po wybraniu go z katalogu
   const handlePanelChange = (panelId) => {
@@ -80,6 +101,13 @@ const App = () => {
     // Przedmiar ilościowy
     const takeoffResult = await getQuantityTakeoff(apiParams);
     setTakeoff(takeoffResult && takeoffResult.items ? takeoffResult.items : []);
+    // Zebranie obciążeń dachu
+    const roofLoadsResult = await getRoofLoads(apiParams);
+    setRoofLoads(roofLoadsResult && roofLoadsResult.blocks ? roofLoadsResult : { blocks: [], assumptions: '' });
+    // Dobór gabarytów stóp fundamentowych
+    const foundationSizingResult = await getFoundationSizing(apiParams);
+    setFoundationSizing(foundationSizingResult && foundationSizingResult.blocks
+      ? foundationSizingResult : { blocks: [], qdop_kpa: null, assumptions: '' });
     setLastApiParams(apiParams);
     setIsLoading(false);
   };
@@ -88,17 +116,44 @@ const App = () => {
     if (lastApiParams) exportTakeoff(lastApiParams);
   };
 
+  // Wpisuje wyliczone gabaryty stóp (a×b×h per kategoria słupa) do manual_sizes
+  // danego modułu (Complex) lub całej hali (Simple), przełączając na foundation_method='manual'
+  const handleApplyFoundationSizing = (blockId, categories) => {
+    const manualSizes = {};
+    for (const cat of categories) {
+      if (cat.size) manualSizes[cat.category] = [cat.size.a_m, cat.size.b_m, cat.size.h_m];
+    }
+    setParams(prev => {
+      if (prev.hall_type === 'complex' && (prev.blocks || []).some(b => b.block_id === blockId)) {
+        const blocks = prev.blocks.map(b => b.block_id === blockId
+          ? { ...b, manual_sizes: { ...b.manual_sizes, ...manualSizes }, foundation_method: 'manual' }
+          : b);
+        return { ...prev, blocks };
+      }
+      return { ...prev, manual_sizes: { ...prev.manual_sizes, ...manualSizes }, foundation_method: 'manual' };
+    });
+  };
+
   useEffect(() => { handleGenerate(); }, []);
+
+  // Wczytanie katalogów izolacji dachu i gruntów (z pliku Excel) przy starcie aplikacji
+  useEffect(() => {
+    getRoofThermalInsulationCatalog().then(setThermalInsulationCatalog);
+    getRoofWaterproofingCatalog().then(setWaterproofingCatalog);
+    getSoilCatalog().then(setSoilCatalog);
+  }, []);
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-gray-100 font-sans">
-      <Controls params={params} setParams={setParams} onGenerate={handleGenerate} isLoading={isLoading} onPanelChange={handlePanelChange} catalog={RUUKKI_CATALOG} roofSheetCatalog={ROOF_SHEET_CATALOG} validation={validation} />
+      <Controls params={params} setParams={setParams} onGenerate={handleGenerate} isLoading={isLoading} onPanelChange={handlePanelChange} catalog={RUUKKI_CATALOG} roofSheetCatalog={ROOF_SHEET_CATALOG} thermalInsulationCatalog={thermalInsulationCatalog} waterproofingCatalog={waterproofingCatalog} soilCatalog={soilCatalog} validation={validation} />
       <div className="flex-1 h-full flex flex-col relative">
         {/* Przełącznik widoku 3D / Przedmiar */}
         <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 flex bg-white rounded-lg shadow-md border border-gray-200 p-1">
           {[
             { key: '3d', label: 'Model 3D' },
             { key: 'takeoff', label: 'Przedmiar' },
+            { key: 'loads', label: 'Obciążenia' },
+            { key: 'foundations', label: 'Fundamenty' },
           ].map(v => (
             <button key={v.key} onClick={() => setActiveView(v.key)}
               className={`px-4 py-1.5 text-[11px] font-bold rounded uppercase tracking-wide transition-colors ${activeView === v.key ? 'bg-blue-600 text-white' : 'text-gray-500 hover:bg-gray-100'}`}>
@@ -112,6 +167,12 @@ const App = () => {
         </div>
         <div className="flex-1 h-full" style={{ display: activeView === 'takeoff' ? 'flex' : 'none' }}>
           <QuantityTakeoffView items={takeoff} onExport={handleExportTakeoff} />
+        </div>
+        <div className="flex-1 h-full" style={{ display: activeView === 'loads' ? 'flex' : 'none' }}>
+          <RoofLoadsView data={roofLoads} />
+        </div>
+        <div className="flex-1 h-full" style={{ display: activeView === 'foundations' ? 'flex' : 'none' }}>
+          <FoundationSizingView data={foundationSizing} onApply={handleApplyFoundationSizing} />
         </div>
       </div>
     </div>

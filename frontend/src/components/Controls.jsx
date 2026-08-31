@@ -12,6 +12,7 @@ import {
   ExternalOfficesSection,
   InternalOfficesSection,
   ReserveZonesSection,
+  ClimateLoadsSection,
 } from './sections';
 
 // --- KOMPONENT ZWIJANEJ SEKCJI ---
@@ -93,7 +94,7 @@ const ConnectionsPanel = ({ blocks, connections, onChange }) => {
 };
 
 // --- GŁÓWNY KOMPONENT ---
-const Controls = ({ params, setParams, onGenerate, isLoading, onPanelChange, catalog, roofSheetCatalog, validation }) => {
+const Controls = ({ params, setParams, onGenerate, isLoading, onPanelChange, catalog, roofSheetCatalog, thermalInsulationCatalog, waterproofingCatalog, soilCatalog, validation }) => {
   const fileInputRef = useRef(null);
 
   // --- onChange handler for Simple mode (top-level params) ---
@@ -166,6 +167,11 @@ const Controls = ({ params, setParams, onGenerate, isLoading, onPanelChange, cat
         ))}
       </div>
 
+      {/* Lokalizacja / obciążenia klimatyczne — wspólne dla całej hali, niezależnie od trybu */}
+      <CollapsibleSection title="Lokalizacja — obciążenia klimatyczne">
+        <ClimateLoadsSection data={params} onChange={handleSimpleChange} soilCatalog={soilCatalog} />
+      </CollapsibleSection>
+
       {/* ===================== SIMPLE MODE ===================== */}
       {params.hall_type === 'simple' && (
         <div className="flex-1 overflow-y-auto pr-1 custom-scrollbar">
@@ -174,7 +180,7 @@ const Controls = ({ params, setParams, onGenerate, isLoading, onPanelChange, cat
           </CollapsibleSection>
 
           <CollapsibleSection title="2. Geometria Dachu">
-            <RoofSection data={params} onChange={handleSimpleChange} roofSheetCatalog={roofSheetCatalog} />
+            <RoofSection data={params} onChange={handleSimpleChange} roofSheetCatalog={roofSheetCatalog} thermalInsulationCatalog={thermalInsulationCatalog} waterproofingCatalog={waterproofingCatalog} />
           </CollapsibleSection>
 
           <CollapsibleSection title="3. Logistyka i Doki" defaultOpen={true}>
@@ -300,7 +306,7 @@ const Controls = ({ params, setParams, onGenerate, isLoading, onPanelChange, cat
 
                         <div className="border border-gray-100 rounded p-1.5">
                           <span className="text-[8px] font-bold text-gray-600 block mb-1 uppercase">Dach</span>
-                          <RoofSection data={block} onChange={blockHandler} roofSheetCatalog={roofSheetCatalog} />
+                          <RoofSection data={block} onChange={blockHandler} roofSheetCatalog={roofSheetCatalog} thermalInsulationCatalog={thermalInsulationCatalog} waterproofingCatalog={waterproofingCatalog} />
                         </div>
 
                         <div className="border border-gray-100 rounded p-1.5">

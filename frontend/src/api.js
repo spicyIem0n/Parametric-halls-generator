@@ -59,6 +59,82 @@ export const getQuantityTakeoff = async (params) => {
     }
 };
 
+export const getRoofLoads = async (params) => {
+    try {
+        const response = await fetch(`${API_URL}/roof-loads`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(params),
+        });
+        if (!response.ok) {
+            throw new Error(`Błąd HTTP: ${response.status}`);
+        }
+        return await response.json();
+    } catch (error) {
+        console.error("Błąd pobierania zebrania obciążeń dachu:", error);
+        return { blocks: [], assumptions: "" };
+    }
+};
+
+export const getFoundationSizing = async (params) => {
+    try {
+        const response = await fetch(`${API_URL}/foundation-sizing`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(params),
+        });
+        if (!response.ok) {
+            throw new Error(`Błąd HTTP: ${response.status}`);
+        }
+        return await response.json();
+    } catch (error) {
+        console.error("Błąd pobierania doboru gabarytów stóp fundamentowych:", error);
+        return { blocks: [], qdop_kpa: null, assumptions: "" };
+    }
+};
+
+export const getSoilCatalog = async () => {
+    try {
+        const response = await fetch(`${API_URL}/catalogs/soil`);
+        if (!response.ok) {
+            throw new Error(`Błąd HTTP: ${response.status}`);
+        }
+        const data = await response.json();
+        return data && data.items ? data.items : [];
+    } catch (error) {
+        console.error("Błąd pobierania katalogu gruntów:", error);
+        return [];
+    }
+};
+
+export const getRoofThermalInsulationCatalog = async () => {
+    try {
+        const response = await fetch(`${API_URL}/catalogs/roof-thermal-insulation`);
+        if (!response.ok) {
+            throw new Error(`Błąd HTTP: ${response.status}`);
+        }
+        const data = await response.json();
+        return data && data.items ? data.items : [];
+    } catch (error) {
+        console.error("Błąd pobierania katalogu izolacji termicznej dachu:", error);
+        return [];
+    }
+};
+
+export const getRoofWaterproofingCatalog = async () => {
+    try {
+        const response = await fetch(`${API_URL}/catalogs/roof-waterproofing`);
+        if (!response.ok) {
+            throw new Error(`Błąd HTTP: ${response.status}`);
+        }
+        const data = await response.json();
+        return data && data.items ? data.items : [];
+    } catch (error) {
+        console.error("Błąd pobierania katalogu izolacji przeciwwodnej dachu:", error);
+        return [];
+    }
+};
+
 export const exportTakeoff = async (params) => {
     try {
         const response = await fetch(`${API_URL}/quantity-takeoff/export`, {

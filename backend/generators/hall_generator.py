@@ -684,6 +684,7 @@ class HallGenerator:
                             "block_id": bid_a,
                             "element_type": "fire_wall_cladding",
                             "connection": "module_joint",
+                            "cladding_orientation": "horizontal",
                         },
                     ))
 
