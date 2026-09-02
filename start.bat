@@ -1,20 +1,17 @@
 @echo off
-echo ===================================================
-echo 🏗️ Start - Parametryczny Generator Hal Przemyslowych
-echo ===================================================
+echo Inicjalizacja środowiska Hale Parametryczne...
 
-echo [1/3] Uruchamianie serwera Backend (FastAPI)...
-start "Backend - FastAPI" cmd /k "cd backend && uvicorn main:app --reload"
+:: 1. Dodanie przenośnego Node.js do ścieżki
+:: Jeśli Twój folder z node nazywa się inaczej, zmień "node_portable" poniżej
+set PATH=%CD%\node_portable;%PATH%
 
-echo [2/3] Uruchamianie serwera Frontend (React)...
-:: Jesli uzywasz Create React App, zamien "npm run dev" na "npm start"
-start "Frontend - React" cmd /k "cd frontend && npm run dev"
+:: 2. Uruchomienie serwera Backend w osobnym oknie
+cd backend
+start "Serwer Obliczeniowy (Backend)" cmd /k "python -m uvicorn main:app --reload"
 
-echo [3/3] Oczekiwanie na inicjalizacje uslug (5 sekund)...
-timeout /t 5 /nobreak > NUL
-
-echo Otwieranie przegladarki...
-:: Jesli uzywasz Create React App, zamien 5173 na 3000
-start http://localhost:5173
-
-echo ✅ Gotowe! Mozesz zaczac projektowac.
+:: 3. Uruchomienie interfejsu Frontend
+cd ..\frontend
+echo Sprawdzanie bibliotek frontendu...
+call npm install
+echo Uruchamianie interfejsu...
+npm run dev

@@ -135,6 +135,35 @@ export const getRoofWaterproofingCatalog = async () => {
     }
 };
 
+export const exportIfc = async (params) => {
+    try {
+        const response = await fetch(`${API_URL}/export/ifc`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(params),
+        });
+        if (!response.ok) {
+            throw new Error(`Błąd HTTP: ${response.status}`);
+        }
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        const w = params.width || 0;
+        const l = params.length || 0;
+        a.download = `hala_${w}x${l}.ifc`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        return true;
+    } catch (error) {
+        console.error("Błąd eksportu do IFC:", error);
+        alert("Nie udało się wyeksportować modelu do formatu IFC.");
+        return false;
+    }
+};
+
 export const exportTakeoff = async (params) => {
     try {
         const response = await fetch(`${API_URL}/quantity-takeoff/export`, {

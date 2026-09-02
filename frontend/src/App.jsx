@@ -5,7 +5,7 @@ import QuantityTakeoffView from './components/QuantityTakeoffView';
 import RoofLoadsView from './components/RoofLoadsView';
 import FoundationSizingView from './components/FoundationSizingView';
 import {
-  generateHallParameters, validateHall, getQuantityTakeoff, exportTakeoff,
+  generateHallParameters, validateHall, getQuantityTakeoff, exportTakeoff, exportIfc,
   getRoofThermalInsulationCatalog, getRoofWaterproofingCatalog, getRoofLoads,
   getFoundationSizing, getSoilCatalog,
 } from './api';
@@ -116,6 +116,10 @@ const App = () => {
     if (lastApiParams) exportTakeoff(lastApiParams);
   };
 
+  const handleExportIfc = () => {
+    if (lastApiParams) exportIfc(lastApiParams);
+  };
+
   // Wpisuje wyliczone gabaryty stóp (a×b×h per kategoria słupa) do manual_sizes
   // danego modułu (Complex) lub całej hali (Simple), przełączając na foundation_method='manual'
   const handleApplyFoundationSizing = (blockId, categories) => {
@@ -161,6 +165,17 @@ const App = () => {
             </button>
           ))}
         </div>
+
+        {activeView === '3d' && (
+          <button
+            onClick={handleExportIfc}
+            disabled={!lastApiParams || components.length === 0}
+            className="absolute top-4 right-4 z-20 px-3 py-1.5 text-[11px] font-bold rounded border border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100 disabled:opacity-40 disabled:cursor-not-allowed uppercase tracking-wide shadow-md"
+            title="Eksportuj model 3D do pliku IFC (Revit, BimVision i inne)"
+          >
+            Eksportuj IFC
+          </button>
+        )}
 
         <div className="flex-1 h-full" style={{ display: activeView === '3d' ? 'block' : 'none' }}>
           <Scene3D components={components} />

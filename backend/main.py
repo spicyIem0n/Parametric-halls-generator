@@ -11,6 +11,8 @@ from core.insulation_catalog import load_thermal_insulation_catalog, load_waterp
 from core.roof_load_calculator import RoofLoadCalculator
 from core.foundation_sizing_calculator import FoundationSizingCalculator
 from core.soil_catalog import load_soil_catalog
+from core.ifc_exporter import export_ifc_to_bytes
+from core.price_catalog import load_price_catalog, sync_and_price_items
 
 app = FastAPI(title="Parametric Hall API")
 
@@ -30,6 +32,30 @@ def generate_hall(params: HallParameters):
     generator = HallGenerator(params)
     components = generator.generate_all_components()
     return {"components": components}
+
+
+@app.post("/export/ifc")
+def export_ifc(params: HallParameters):
+    """
+    Eksportuje wygenerowany model 3D hali do pliku IFC4 (do otwarcia w Revit, BimVision itp.).
+
+    Faza 1: masing/koordynacja — elementy jako bryły prostopadłościenne
+    (IfcColumn/IfcBeam/IfcWall/IfcSlab/... wg mapowania w core/ifc_exporter.py),
+    poprawnie rozmieszczone i zorientowane w przestrzeni (konwersja Y-up -> Z-up).
+    """
+    generator = HallGenerator(params)
+    components = generator.generate_all_components()
+    ifc_bytes = export_ifc_to_bytes(params, components)
+
+    width = int(params.width) if params.width else 0
+    length = int(params.length) if params.length else 0
+    fname = f"hala_{width}x{length}.ifc"
+
+    return StreamingResponse(
+        io.BytesIO(ifc_bytes),
+        media_type="application/x-step",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )
 
 
 @app.post("/validate-hall")
@@ -114,19 +140,28 @@ def soil_catalog():
     return {"items": load_soil_catalog()}
 
 
+@app.get("/catalogs/prices")
+def price_catalog():
+    """Katalog cen jednostkowych pozycji przedmiaru (wczytywany z pliku Excel)."""
+    return {"items": load_price_catalog()}
+
+
 @app.post("/quantity-takeoff")
 def quantity_takeoff(params: HallParameters):
-    """Zwraca przedmiar ilosciowy (lista pozycji) na podstawie modelu."""
-    return {"items": TakeoffCalculator.compute(params)}
+    """Zwraca przedmiar ilosciowy (lista pozycji) na podstawie modelu, wyceniony wg katalogu cen."""
+    items = TakeoffCalculator.compute(params)
+    items = sync_and_price_items(items)
+    return {"items": items}
 
 
 @app.post("/quantity-takeoff/export")
 def quantity_takeoff_export(params: HallParameters):
-    """Eksportuje przedmiar do pliku Excel (.xlsx)."""
+    """Eksportuje wyceniony przedmiar do pliku Excel (.xlsx)."""
     from openpyxl import Workbook
     from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 
     items = TakeoffCalculator.compute(params)
+    items = sync_and_price_items(items)
 
     wb = Workbook()
     ws = wb.active
@@ -161,6 +196,19 @@ def quantity_takeoff_export(params: HallParameters):
                 cell.alignment = center
             else:
                 cell.alignment = left
+
+    # Wiersz podsumowania (suma pozycji z wypelniona cena; pozycje bez ceny nie wchodza do sumy)
+    total = sum(it["wartosc"] for it in items if it["wartosc"] is not None)
+    priced_count = sum(1 for it in items if it["wartosc"] is not None)
+    total_row = len(items) + 2
+    ws.cell(row=total_row, column=5, value="RAZEM:").font = Font(bold=True)
+    ws.cell(row=total_row, column=5).alignment = Alignment(horizontal="right")
+    total_cell = ws.cell(row=total_row, column=6, value=round(total, 2))
+    total_cell.font = Font(bold=True)
+    total_cell.alignment = center
+    if priced_count < len(items):
+        ws.cell(row=total_row, column=7,
+                value=f"Uwaga: {len(items) - priced_count} z {len(items)} pozycji bez ceny w katalogu — suma częściowa.")
 
     # Szerokosci kolumn
     widths = [6, 42, 14, 12, 16, 14, 26]
