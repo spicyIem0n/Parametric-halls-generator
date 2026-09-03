@@ -1,12 +1,24 @@
-import React from 'react';
+import React, { useRef } from 'react';
 
 /**
  * QuantityTakeoffView — tabela przedmiaru ilościowego.
  * @param {Array} items - pozycje przedmiaru { lp, opis, jednostka, ilosc, cena_jedn, wartosc, uwagi }
  * @param {function} onExport - handler eksportu do Excel
+ * @param {function} onDownloadPriceCatalog - pobiera cennik (price_catalog.xlsx) na komputer użytkownika do edycji
+ * @param {function} onUploadPriceCatalog - wgrywa zedytowany plik cennika (File) z powrotem na serwer
+ * @param {boolean} priceCatalogEditEnabled - czy edycja cennika jest włączona (flaga funkcji administratora)
  */
-const QuantityTakeoffView = ({ items, onExport }) => {
+const QuantityTakeoffView = ({ items, onExport, onDownloadPriceCatalog, onUploadPriceCatalog, priceCatalogEditEnabled = true }) => {
   const hasData = items && items.length > 0;
+  const fileInputRef = useRef(null);
+
+  const handleUploadClick = () => fileInputRef.current?.click();
+
+  const handleFileSelected = (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (file && onUploadPriceCatalog) onUploadPriceCatalog(file);
+    e.target.value = ''; // pozwala ponownie wybrać ten sam plik po ewentualnej poprawce
+  };
 
   const fmt = (v) => {
     if (v === null || v === undefined) return '';
@@ -41,6 +53,31 @@ const QuantityTakeoffView = ({ items, onExport }) => {
               )}
             </span>
           )}
+          {priceCatalogEditEnabled && (
+            <>
+              <button
+                onClick={onDownloadPriceCatalog}
+                title="Pobiera plik cennika (price_catalog.xlsx) na Twój komputer — edytuj go we własnym Excelu"
+                className="px-3 py-1.5 text-[11px] font-bold rounded border border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100 uppercase tracking-wide"
+              >
+                Pobierz cennik
+              </button>
+              <button
+                onClick={handleUploadClick}
+                title="Wgraj z powrotem zedytowany plik cennika — zmiany zostaną scalone z serwerem"
+                className="px-3 py-1.5 text-[11px] font-bold rounded border border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100 uppercase tracking-wide"
+              >
+                Wgraj cennik
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".xlsx"
+                onChange={handleFileSelected}
+                style={{ display: 'none' }}
+              />
+            </>
+          )}
           <button
             onClick={onExport}
             disabled={!hasData}
@@ -53,8 +90,10 @@ const QuantityTakeoffView = ({ items, onExport }) => {
 
       {missingCount > 0 && (
         <div className="px-4 py-2 bg-amber-50 border-b border-amber-200 text-[11px] text-amber-800">
-          {missingCount} {missingCount === 1 ? 'pozycja nie ma' : 'pozycji nie ma'} ceny w katalogu — uzupełnij ją w pliku{' '}
-          <code className="bg-amber-100 px-1 rounded">backend/data/price_catalog.xlsx</code> (arkusz „Ceny").
+          {missingCount} {missingCount === 1 ? 'pozycja nie ma' : 'pozycji nie ma'} ceny w katalogu
+          {priceCatalogEditEnabled
+            ? ' — kliknij „Pobierz cennik", uzupełnij cenę w arkuszu „Ceny" i wgraj go z powrotem przyciskiem „Wgraj cennik".'
+            : '. Edycja cennika jest wyłączona w tej wersji programu.'}
         </div>
       )}
 

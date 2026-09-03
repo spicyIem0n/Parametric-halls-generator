@@ -6,7 +6,11 @@ echo Inicjalizacja środowiska Hale Parametryczne...
 set PATH=%CD%\node_portable;%PATH%
 
 :: 2. Uruchomienie serwera Backend w osobnym oknie
+:: ADMIN_TOKEN chroni panel administratora (przełączniki funkcji, np. trial/pelna wersja).
+:: WAZNE: przy wystawieniu backendu na serwer dostepny dla innych uzytkownikow,
+:: ustaw wlasny, tajny token ponizej (domyslny jest publicznie znany z kodu zrodlowego).
 cd backend
+set ADMIN_TOKEN=zmien-mnie-w-ADMIN_TOKEN
 start "Serwer Obliczeniowy (Backend)" cmd /k "python -m uvicorn main:app --reload"
 
 :: 3. Uruchomienie interfejsu Frontend

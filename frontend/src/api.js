@@ -164,6 +164,51 @@ export const exportIfc = async (params) => {
     }
 };
 
+export const downloadPriceCatalog = async () => {
+    try {
+        const response = await fetch(`${API_URL}/catalogs/prices/download`);
+        if (!response.ok) {
+            throw new Error(`Błąd HTTP: ${response.status}`);
+        }
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "price_catalog.xlsx";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        return true;
+    } catch (error) {
+        console.error("Błąd pobierania cennika:", error);
+        alert("Nie udało się pobrać pliku cennika.");
+        return false;
+    }
+};
+
+// Wgrywa zedytowany lokalnie plik cennika (File z <input type="file">) z powrotem na serwer.
+// Zwraca { ok: true, summary } albo { ok: false, error } — komunikat do pokazania użytkownikowi.
+export const uploadPriceCatalog = async (file) => {
+    try {
+        const formData = new FormData();
+        formData.append('file', file);
+        const response = await fetch(`${API_URL}/catalogs/prices/upload`, {
+            method: 'POST',
+            body: formData,
+        });
+        const data = await response.json().catch(() => null);
+        if (!response.ok) {
+            const detail = (data && data.detail) || `Błąd HTTP: ${response.status}`;
+            return { ok: false, error: detail };
+        }
+        return { ok: true, summary: data };
+    } catch (error) {
+        console.error("Błąd wgrywania cennika:", error);
+        return { ok: false, error: "Nie udało się połączyć z serwerem." };
+    }
+};
+
 export const exportTakeoff = async (params) => {
     try {
         const response = await fetch(`${API_URL}/quantity-takeoff/export`, {
@@ -190,5 +235,58 @@ export const exportTakeoff = async (params) => {
         console.error("Błąd eksportu przedmiaru:", error);
         alert("Nie udało się wyeksportować przedmiaru do Excela.");
         return false;
+    }
+};
+
+// --- Flagi funkcji / panel administratora ---
+
+export const getFeatures = async () => {
+    try {
+        const response = await fetch(`${API_URL}/features`);
+        if (!response.ok) throw new Error(`Błąd HTTP: ${response.status}`);
+        const data = await response.json();
+        return (data && data.flags) || {};
+    } catch (error) {
+        console.error("Błąd pobierania flag funkcji:", error);
+        // W razie awarii endpointu domyślnie NIE ukrywamy funkcji — brak połączenia
+        // z backendem i tak zablokuje wszystko inne w aplikacji.
+        return {};
+    }
+};
+
+// Weryfikuje token administratora. Zwraca { ok, labels } albo { ok: false, error }.
+export const verifyAdminToken = async (token) => {
+    try {
+        const response = await fetch(`${API_URL}/admin/verify`, {
+            method: 'POST',
+            headers: { 'X-Admin-Token': token },
+        });
+        const data = await response.json().catch(() => null);
+        if (!response.ok) {
+            return { ok: false, error: (data && data.detail) || `Błąd HTTP: ${response.status}` };
+        }
+        return { ok: true, labels: (data && data.labels) || {} };
+    } catch (error) {
+        console.error("Błąd weryfikacji tokenu administratora:", error);
+        return { ok: false, error: "Nie udało się połączyć z serwerem." };
+    }
+};
+
+// Ustawia jedną flagę funkcji. Zwraca { ok, flags } albo { ok: false, error }.
+export const setFeatureFlag = async (token, name, value) => {
+    try {
+        const response = await fetch(`${API_URL}/admin/features`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Admin-Token': token },
+            body: JSON.stringify({ name, value }),
+        });
+        const data = await response.json().catch(() => null);
+        if (!response.ok) {
+            return { ok: false, error: (data && data.detail) || `Błąd HTTP: ${response.status}` };
+        }
+        return { ok: true, flags: (data && data.flags) || {} };
+    } catch (error) {
+        console.error("Błąd zapisu flagi funkcji:", error);
+        return { ok: false, error: "Nie udało się połączyć z serwerem." };
     }
 };

@@ -4,8 +4,10 @@ import Scene3D from './components/Scene3D';
 import QuantityTakeoffView from './components/QuantityTakeoffView';
 import RoofLoadsView from './components/RoofLoadsView';
 import FoundationSizingView from './components/FoundationSizingView';
+import AdminPanel from './components/AdminPanel';
 import {
   generateHallParameters, validateHall, getQuantityTakeoff, exportTakeoff, exportIfc,
+  downloadPriceCatalog, uploadPriceCatalog, getFeatures,
   getRoofThermalInsulationCatalog, getRoofWaterproofingCatalog, getRoofLoads,
   getFoundationSizing, getSoilCatalog,
 } from './api';
@@ -80,6 +82,9 @@ const App = () => {
   const [thermalInsulationCatalog, setThermalInsulationCatalog] = useState([]);
   const [waterproofingCatalog, setWaterproofingCatalog] = useState([]);
   const [soilCatalog, setSoilCatalog] = useState([]);
+  // Flagi funkcji (włącz/wyłącz per wdrożenie, np. trial vs pełna wersja) + panel administratora
+  const [flags, setFlags] = useState({});
+  const [showAdmin, setShowAdmin] = useState(false);
 
   // Funkcja aktualizująca grubość panelu do API po wybraniu go z katalogu
   const handlePanelChange = (panelId) => {
@@ -120,6 +125,25 @@ const App = () => {
     if (lastApiParams) exportIfc(lastApiParams);
   };
 
+  const handleDownloadPriceCatalog = () => {
+    downloadPriceCatalog();
+  };
+
+  // Wgrywa zedytowany lokalnie cennik i od razu przelicza ceny w bieżącym przedmiarze
+  const handleUploadPriceCatalog = async (file) => {
+    const result = await uploadPriceCatalog(file);
+    if (result.ok) {
+      const s = result.summary;
+      alert(`Cennik zaktualizowany: ${s.total} pozycji łącznie (zaktualizowano/dopasowano: ${s.updated_existing}, nowe: ${s.added_new}).`);
+      if (lastApiParams) {
+        const takeoffResult = await getQuantityTakeoff(lastApiParams);
+        setTakeoff(takeoffResult && takeoffResult.items ? takeoffResult.items : []);
+      }
+    } else {
+      alert(`Nie udało się wgrać cennika: ${result.error}`);
+    }
+  };
+
   // Wpisuje wyliczone gabaryty stóp (a×b×h per kategoria słupa) do manual_sizes
   // danego modułu (Complex) lub całej hali (Simple), przełączając na foundation_method='manual'
   const handleApplyFoundationSizing = (blockId, categories) => {
@@ -145,6 +169,11 @@ const App = () => {
     getRoofThermalInsulationCatalog().then(setThermalInsulationCatalog);
     getRoofWaterproofingCatalog().then(setWaterproofingCatalog);
     getSoilCatalog().then(setSoilCatalog);
+  }, []);
+
+  // Flagi funkcji (włącz/wyłącz per wdrożenie)
+  useEffect(() => {
+    getFeatures().then(setFlags);
   }, []);
 
   return (
@@ -181,7 +210,13 @@ const App = () => {
           <Scene3D components={components} />
         </div>
         <div className="flex-1 h-full" style={{ display: activeView === 'takeoff' ? 'flex' : 'none' }}>
-          <QuantityTakeoffView items={takeoff} onExport={handleExportTakeoff} />
+          <QuantityTakeoffView
+            items={takeoff}
+            onExport={handleExportTakeoff}
+            onDownloadPriceCatalog={handleDownloadPriceCatalog}
+            onUploadPriceCatalog={handleUploadPriceCatalog}
+            priceCatalogEditEnabled={flags.price_catalog_edit !== false}
+          />
         </div>
         <div className="flex-1 h-full" style={{ display: activeView === 'loads' ? 'flex' : 'none' }}>
           <RoofLoadsView data={roofLoads} />
@@ -189,7 +224,24 @@ const App = () => {
         <div className="flex-1 h-full" style={{ display: activeView === 'foundations' ? 'flex' : 'none' }}>
           <FoundationSizingView data={foundationSizing} onApply={handleApplyFoundationSizing} />
         </div>
+
+        {/* Dyskretny dostęp do panelu administratora (przełączniki funkcji) */}
+        <button
+          onClick={() => setShowAdmin(true)}
+          title="Panel administratora"
+          className="absolute bottom-3 right-3 z-20 w-7 h-7 flex items-center justify-center rounded-full text-gray-300 hover:text-gray-600 hover:bg-white text-sm"
+        >
+          ⚙
+        </button>
       </div>
+
+      {showAdmin && (
+        <AdminPanel
+          flags={flags}
+          onFlagsChanged={setFlags}
+          onClose={() => setShowAdmin(false)}
+        />
+      )}
     </div>
   );
 };

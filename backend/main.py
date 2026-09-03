@@ -1,5 +1,5 @@
 import io
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, UploadFile, File, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from models import HallParameters
@@ -12,7 +12,15 @@ from core.roof_load_calculator import RoofLoadCalculator
 from core.foundation_sizing_calculator import FoundationSizingCalculator
 from core.soil_catalog import load_soil_catalog
 from core.ifc_exporter import export_ifc_to_bytes
-from core.price_catalog import load_price_catalog, sync_and_price_items
+from core.price_catalog import (
+    load_price_catalog,
+    sync_and_price_items,
+    get_catalog_bytes,
+    import_price_catalog,
+    PriceCatalogValidationError,
+)
+from core.feature_flags import get_flags, set_flag, is_enabled, FLAG_LABELS, DEFAULT_FLAGS
+from core.admin_auth import check_admin_token
 
 app = FastAPI(title="Parametric Hall API")
 
@@ -144,6 +152,92 @@ def soil_catalog():
 def price_catalog():
     """Katalog cen jednostkowych pozycji przedmiaru (wczytywany z pliku Excel)."""
     return {"items": load_price_catalog()}
+
+
+@app.get("/catalogs/prices/download")
+def download_price_catalog():
+    """
+    Pobiera plik katalogu cen (price_catalog.xlsx) na komputer użytkownika —
+    do edycji we własnym, lokalnym Excelu. Plik na serwerze pozostaje
+    niezmieniony (to tylko odczyt), więc pobieranie nigdy nie koliduje z
+    żadnym innym użytkownikiem ani z samorozbudową katalogu.
+    """
+    if not is_enabled("price_catalog_edit"):
+        raise HTTPException(status_code=403, detail="Ta funkcja jest wyłączona w tej wersji programu.")
+    try:
+        data = get_catalog_bytes()
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    return StreamingResponse(
+        io.BytesIO(data),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": 'attachment; filename="price_catalog.xlsx"'},
+    )
+
+
+@app.post("/catalogs/prices/upload")
+async def upload_price_catalog(file: UploadFile = File(...)):
+    """
+    Wgrywa zedytowany lokalnie plik katalogu cen z powrotem na serwer.
+    Zawartość jest SCALANA z aktualnym stanem serwera (pozycje dopisane przez
+    innych użytkowników w międzyczasie nie są kasowane) i zapisywana atomowo.
+    """
+    if not is_enabled("price_catalog_edit"):
+        raise HTTPException(status_code=403, detail="Ta funkcja jest wyłączona w tej wersji programu.")
+    content = await file.read()
+    try:
+        summary = import_price_catalog(content)
+    except PriceCatalogValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except (PermissionError, OSError):
+        raise HTTPException(
+            status_code=503,
+            detail="Serwer chwilowo nie mógł zapisać pliku katalogu cen (jest w tej chwili używany przez inny "
+                   "proces na serwerze). Spróbuj wgrać plik ponownie za chwilę.",
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Nie udało się zapisać katalogu cen: {e}")
+    return summary
+
+
+@app.get("/features")
+def features():
+    """
+    Stan przełączników funkcji programu (widoczny publicznie — frontend na jego
+    podstawie pokazuje/ukrywa dane funkcje, np. dla wersji trialowej).
+    """
+    return {"flags": get_flags()}
+
+
+@app.post("/admin/features")
+def set_feature_flag(payload: dict, x_admin_token: str = Header(default="")):
+    """
+    Włącza/wyłącza jedną flagę funkcji. Wymaga poprawnego tokenu administratora
+    w nagłówku X-Admin-Token (patrz core.admin_auth / zmienna ADMIN_TOKEN).
+    Body: {"name": "<nazwa_flagi>", "value": true|false}.
+    """
+    if not check_admin_token(x_admin_token):
+        raise HTTPException(status_code=401, detail="Nieprawidłowy token administratora.")
+    name = payload.get("name")
+    value = payload.get("value")
+    if name not in DEFAULT_FLAGS or not isinstance(value, bool):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Nieprawidłowe dane. Znane flagi: {list(DEFAULT_FLAGS.keys())}.",
+        )
+    try:
+        flags = set_flag(name, value)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Nie udało się zapisać ustawienia: {e}")
+    return {"flags": flags}
+
+
+@app.post("/admin/verify")
+def verify_admin_token(x_admin_token: str = Header(default="")):
+    """Sprawdza, czy podany token administratora jest poprawny (do logowania w panelu)."""
+    if not check_admin_token(x_admin_token):
+        raise HTTPException(status_code=401, detail="Nieprawidłowy token administratora.")
+    return {"ok": True, "labels": FLAG_LABELS}
 
 
 @app.post("/quantity-takeoff")
