@@ -87,6 +87,13 @@ class BlockDefinition(BaseModel):
     truss_depth: float = 0.6
     purlin_spacing: float = 2.0
     roof_sheet_id: str = "T85_08"
+    # Tarczowe dzialanie poszycia dachu (PN-EN 1993-1-3 rozdz. 10): "trapezoidal" | "none"
+    roof_diaphragm: str = "trapezoidal"
+    # Podstawa slupka posredniego sciany: "fixed" (domyslnie) | "pinned" (opcja)
+    cladding_post_base: str = "fixed"
+    # Rygiel okapowy: "stiff" = kratowa wiatrownica podpierajaca wierzch slupkow
+    # (rozwiazanie podstawowe) | "none" = brak podparcia, slupki jak wsporniki
+    eave_rail: str = "stiff"
     roof_panel_thickness: float = 0.15
     drainage_zones_x: int = 2
     drainage_zones_z: int = 4
@@ -103,12 +110,14 @@ class BlockDefinition(BaseModel):
     column_method: str = "default"
     manual_column_sections: Dict[str, List[float]] = {
         "external_main": [0.4, 0.4], "external_corner": [0.4, 0.4],
-        "external_intermediate_cladding": [0.3, 0.3], "internal_main": [0.4, 0.4]
+        "external_intermediate_cladding": [0.3, 0.3], "internal_main": [0.4, 0.4],
+        "internal_dock_edge": [0.4, 0.4]
     }
     foundation_method: str = "default"
     manual_sizes: Dict[str, List[float]] = {
         "external_main": [2.5, 4.0, 0.45], "external_corner": [2.5, 4.0, 0.45],
-        "external_intermediate_cladding": [1.5, 1.5, 0.40], "internal_main": [2.5, 2.5, 0.45]
+        "external_intermediate_cladding": [1.5, 1.5, 0.40], "internal_main": [2.5, 2.5, 0.45],
+        "internal_dock_edge": [3.0, 3.0, 0.50]
     }
     foundation_depth: float = 1.0
     dock_foundation_depth: float = 1.2
@@ -245,14 +254,16 @@ class HallParameters(BaseModel):
 
     manual_sizes: Dict[str, List[float]] = {
         "external_main": [2.5, 4.0, 0.45], "external_corner": [2.5, 4.0, 0.45],
-        "external_intermediate_cladding": [1.5, 1.5, 0.40], "internal_main": [2.5, 2.5, 0.45]
+        "external_intermediate_cladding": [1.5, 1.5, 0.40], "internal_main": [2.5, 2.5, 0.45],
+        "internal_dock_edge": [3.0, 3.0, 0.50]
     }
 
     # Słupy i Podwaliny
     column_method: str = "default"
     manual_column_sections: Dict[str, List[float]] = {
         "external_main": [0.4, 0.4], "external_corner": [0.4, 0.4],
-        "external_intermediate_cladding": [0.3, 0.3], "internal_main": [0.4, 0.4]
+        "external_intermediate_cladding": [0.3, 0.3], "internal_main": [0.4, 0.4],
+        "internal_dock_edge": [0.4, 0.4]
     }
     plinth_thickness: float = 0.24
     plinth_top_level: float = 0.30
@@ -272,6 +283,13 @@ class HallParameters(BaseModel):
     truss_depth: float = 0.6
     purlin_spacing: float = 2.0
     roof_sheet_id: str = "T85_08"
+    # Tarczowe dzialanie poszycia dachu (PN-EN 1993-1-3 rozdz. 10): "trapezoidal" | "none"
+    roof_diaphragm: str = "trapezoidal"
+    # Podstawa slupka posredniego sciany: "fixed" (domyslnie) | "pinned" (opcja)
+    cladding_post_base: str = "fixed"
+    # Rygiel okapowy: "stiff" = kratowa wiatrownica podpierajaca wierzch slupkow
+    # (rozwiazanie podstawowe) | "none" = brak podparcia, slupki jak wsporniki
+    eave_rail: str = "stiff"
     roof_panel_thickness: float = 0.15
     # Izolacja dachu (katalog z pliku Excel — patrz core/insulation_catalog.py)
     roof_thermal_insulation_enabled: bool = False

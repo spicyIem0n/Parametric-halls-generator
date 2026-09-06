@@ -44,11 +44,13 @@ from core.wall_panel_catalog import get_wall_panel_weight
 
 CONCRETE_DENSITY_KN_M3 = 25.0  # żelbet — ciężar objętościowy do ciężaru własnego słupa
 
-COLUMN_CATEGORIES = ["internal_main", "external_main", "external_corner", "external_intermediate_cladding"]
+COLUMN_CATEGORIES = ["internal_main", "internal_dock_edge", "external_main", "external_corner",
+                    "external_intermediate_cladding"]
 
 # Uproszczone, reprezentatywne współczynniki cpe ściany (wartość bezwzględna) per kategoria słupa
 CPE_WALL = {
     "internal_main": 0.0,                    # brak ściany zewnętrznej
+    "internal_dock_edge": 0.0,               # brak ściany zewnętrznej
     "external_main": 0.8,                    # parcie nawietrzne — ściana boczna
     "external_corner": 1.0,                  # ssanie w strefie narożnej (konserwatywnie)
     "external_intermediate_cladding": 0.8,   # jak external_main (uproszczenie — szczyt + wzdłużne razem)
@@ -56,7 +58,20 @@ CPE_WALL = {
 
 # Słupy pomocnicze ryglówki — przegubowe u dołu i u góry (mocowane do rygla/płatwi),
 # w odróżnieniu od głównych słupów ramy (wspornikowych, utwierdzonych w fundamencie)
-PINNED_BASE_CATEGORIES = {"external_intermediate_cladding"}
+# Domyślnie WSZYSTKIE słupy, także pośrednie pod obudowę, traktowane są jako
+# wspornikowe utwierdzone w stopie — rozwiązanie bezpieczniejsze (moment trafia
+# na stopę). Wariant przegubowy jest opcją włączaną parametrem
+# block.cladding_post_base = "pinned" i WYMAGA POTWIERDZENIA KONSTRUKTORA:
+# przegub u dołu jest poprawny tylko przy zapewnionym podparciu poziomym
+# wierzchu słupka (rygiel okapowy / wiatrownica na poziomie okapu).
+PINNED_BASE_CATEGORIES: set = set()
+
+
+def _pinned_categories(block) -> set:
+    """Zbiór kategorii o przegubowej podstawie — wg ustawienia bloku."""
+    if getattr(block, "cladding_post_base", "fixed") == "pinned":
+        return {"external_intermediate_cladding"}
+    return set(PINNED_BASE_CATEGORIES)
 
 
 def _present_categories(params: HallParameters, block) -> set:
@@ -78,10 +93,41 @@ def _present_categories(params: HallParameters, block) -> set:
             elif node.is_external:
                 present.add("external_main")
             else:
-                present.add("internal_main")
+                present.add(_internal_category(grid, axis_idx))
     # Słupy szczytowe (ryglówka) generowane są zawsze, niezależnie od siatki głównej
     present.add("external_intermediate_cladding")
     return present
+
+
+def _internal_category(grid, axis_idx: int) -> str:
+    """Rozróżnia słup wewnętrzny zwykły od słupa na skraju szerszej nawy.
+
+    Oś granicząca z nawą istotnie szerszą od sąsiedniej (typowo skraj strefy
+    dokowej) zbiera większą powierzchnię dachu i musi mieć własną kategorię
+    stopy — inaczej albo skraj doku jest niedowymiarowany, albo pozostałe
+    stopy wewnętrzne są przewymiarowane.
+    """
+    w_left = grid.axes_x[axis_idx] - grid.axes_x[axis_idx - 1]
+    w_right = grid.axes_x[axis_idx + 1] - grid.axes_x[axis_idx]
+    if abs(w_left - w_right) > 0.5:
+        return "internal_dock_edge"
+    return "internal_main"
+
+
+def _internal_tributary_widths(grid) -> dict:
+    """Realna szerokość zbierania dla obu kategorii słupów wewnętrznych [m].
+
+    Liczona z FAKTYCZNYCH osi siatki (grid.axes_x), nie z uśrednionego
+    width / number_of_aisles — przy strefie dokowej nawy nie są równe.
+    """
+    out = {}
+    for axis_idx in range(1, len(grid.axes_x) - 1):
+        w_left = grid.axes_x[axis_idx] - grid.axes_x[axis_idx - 1]
+        w_right = grid.axes_x[axis_idx + 1] - grid.axes_x[axis_idx]
+        cat = _internal_category(grid, axis_idx)
+        trib = (w_left + w_right) / 2.0
+        out[cat] = max(out.get(cat, 0.0), trib)
+    return out
 
 
 def _column_cross_section(block, category: str):
@@ -94,18 +140,32 @@ def _column_cross_section(block, category: str):
     return default_sec[0], default_sec[1]
 
 
-def _tributary(block, category: str):
-    """Zwraca (powierzchnia_dachu_m2, szerokosc_sciany_m) dla danej kategorii słupa."""
+def _tributary(block, category: str, grid=None):
+    """Zwraca (powierzchnia_dachu_m2, szerokosc_sciany_m) dla danej kategorii słupa.
+
+    Szerokości naw brane są z realnych osi siatki, jeśli grid jest podany —
+    uśrednianie width / number_of_aisles jest błędne przy strefie dokowej.
+    """
     number_of_aisles = max(1, int(getattr(block, "number_of_aisles", 1) or 1))
-    aisle_width = block.width / number_of_aisles
     bay_spacing = block.bay_spacing
+    if grid is not None and len(grid.axes_x) >= 3:
+        widths = _internal_tributary_widths(grid)
+        aisle_width = widths.get("internal_main") or (block.width / number_of_aisles)
+        edge_width = grid.axes_x[1] - grid.axes_x[0]
+    else:
+        widths = {}
+        aisle_width = block.width / number_of_aisles
+        edge_width = aisle_width
 
     if category == "internal_main":
         return aisle_width * bay_spacing, 0.0
+    if category == "internal_dock_edge":
+        trib = widths.get("internal_dock_edge", aisle_width)
+        return trib * bay_spacing, 0.0
     if category == "external_main":
-        return (aisle_width / 2) * bay_spacing, bay_spacing
+        return (edge_width / 2) * bay_spacing, bay_spacing
     if category == "external_corner":
-        return (aisle_width / 2) * (bay_spacing / 2), bay_spacing / 2 + DEFAULTS.gable_column_spacing / 2
+        return (edge_width / 2) * (bay_spacing / 2), bay_spacing / 2 + DEFAULTS.gable_column_spacing / 2
     # external_intermediate_cladding — słup ściany, bez udziału w dachu
     return 0.0, DEFAULTS.gable_column_spacing
 
@@ -125,24 +185,34 @@ def _compute_categories_for_block(params: HallParameters, block) -> dict:
     for cat in COLUMN_CATEGORIES:
         if cat not in present:
             continue
-        a_roof, wall_width = _tributary(block, cat)
+        a_roof, wall_width = _tributary(block, cat, grid_for_block(params, block))
         bx, bz = _column_cross_section(block, cat)
         col_weight_kn = bx * bz * wall_height * CONCRETE_DENSITY_KN_M3
         n_roof_kn = n_roof_kn_m2 * a_roof
 
-        if cat != "internal_main" and wall_width > 0:
+        if not cat.startswith("internal") and wall_width > 0:
             wall_area = wall_width * wall_height
             wall_weight_kn = wall_area * panel_weight_kg_m2 * 9.81 / 1000.0
             cpe = CPE_WALL[cat]
             h_total_kn = wind_qp_wall * cpe * wall_area
-            if cat in PINNED_BASE_CATEGORIES:
+            if cat in _pinned_categories(block):
                 # Słup przegubowy u dołu i u góry: moment nie przenosi się na stopę,
                 # a siła pozioma dzieli się między podstawę i górne podparcie (rygiel/płatew)
                 h_kn = 0.5 * h_total_kn
                 m_knm = 0.0
+            elif (cat == "external_intermediate_cladding"
+                  and getattr(block, "eave_rail", "stiff") == "stiff"):
+                # Słup utwierdzony w stopie + SZTYWNY RYGIEL OKAPOWY (kratowa
+                # wiatrownica) podpierający wierzch: schemat belki utwierdzono-
+                # przegubowej. Moment utwierdzenia M = w*L^2/8, reakcja dolna
+                # H = 3*w*L/8; do momentu dochodzi jeszcze ramię do spodu stopy.
+                w_kn_m = h_total_kn / wall_height
+                h_kn = 3.0 * w_kn_m * wall_height / 8.0
+                m_knm = w_kn_m * wall_height ** 2 / 8.0 + h_kn * foundation_depth
             else:
-                # Słup wspornikowy, utwierdzony w fundamencie — cała reakcja pozioma
-                # i moment (przy ramieniu do połowy wysokości ściany) trafiają do stopy
+                # Słup wspornikowy, utwierdzony w fundamencie, bez podparcia góry —
+                # cała reakcja pozioma i moment (ramię do połowy wysokości ściany)
+                # trafiają do stopy
                 h_kn = h_total_kn
                 arm_m = wall_height / 2 + foundation_depth
                 m_knm = h_kn * arm_m

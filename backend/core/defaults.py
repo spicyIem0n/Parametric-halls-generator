@@ -31,6 +31,7 @@ class ProjectDefaults:
         "external_main": [2.0, 2.0, 0.5],
         "external_corner": [2.0, 2.0, 0.5],
         "external_intermediate_cladding": [1.2, 1.2, 0.5],
+        "internal_dock_edge": [3.0, 3.0, 0.5],
         "internal_main": [1.5, 1.5, 0.5],
     })
 
