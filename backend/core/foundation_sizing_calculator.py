@@ -54,6 +54,7 @@ CATEGORY_LABELS = {
     "external_main": "Słup zewnętrzny (ściana boczna)",
     "external_corner": "Słup narożny",
     "external_intermediate_cladding": "Słup pośredni ściany (szczyt/wzdłużny)",
+    "internal_dock_edge": "Słup wewnętrzny na skraju strefy dokowej",
 }
 
 ROUND_STEP = 0.1
