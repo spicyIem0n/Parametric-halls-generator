@@ -91,6 +91,9 @@ class BlockDefinition(BaseModel):
     roof_diaphragm: str = "trapezoidal"
     # Podstawa slupka posredniego sciany: "fixed" (domyslnie) | "pinned" (opcja)
     cladding_post_base: str = "fixed"
+    # Rygiel okapowy: "stiff" = kratowa wiatrownica podpierajaca wierzch slupkow
+    # (rozwiazanie podstawowe) | "none" = brak podparcia, slupki jak wsporniki
+    eave_rail: str = "stiff"
     roof_panel_thickness: float = 0.15
     drainage_zones_x: int = 2
     drainage_zones_z: int = 4
@@ -284,6 +287,9 @@ class HallParameters(BaseModel):
     roof_diaphragm: str = "trapezoidal"
     # Podstawa slupka posredniego sciany: "fixed" (domyslnie) | "pinned" (opcja)
     cladding_post_base: str = "fixed"
+    # Rygiel okapowy: "stiff" = kratowa wiatrownica podpierajaca wierzch slupkow
+    # (rozwiazanie podstawowe) | "none" = brak podparcia, slupki jak wsporniki
+    eave_rail: str = "stiff"
     roof_panel_thickness: float = 0.15
     # Izolacja dachu (katalog z pliku Excel — patrz core/insulation_catalog.py)
     roof_thermal_insulation_enabled: bool = False

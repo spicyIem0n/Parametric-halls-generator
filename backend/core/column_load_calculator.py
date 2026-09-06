@@ -200,9 +200,19 @@ def _compute_categories_for_block(params: HallParameters, block) -> dict:
                 # a siła pozioma dzieli się między podstawę i górne podparcie (rygiel/płatew)
                 h_kn = 0.5 * h_total_kn
                 m_knm = 0.0
+            elif (cat == "external_intermediate_cladding"
+                  and getattr(block, "eave_rail", "stiff") == "stiff"):
+                # Słup utwierdzony w stopie + SZTYWNY RYGIEL OKAPOWY (kratowa
+                # wiatrownica) podpierający wierzch: schemat belki utwierdzono-
+                # przegubowej. Moment utwierdzenia M = w*L^2/8, reakcja dolna
+                # H = 3*w*L/8; do momentu dochodzi jeszcze ramię do spodu stopy.
+                w_kn_m = h_total_kn / wall_height
+                h_kn = 3.0 * w_kn_m * wall_height / 8.0
+                m_knm = w_kn_m * wall_height ** 2 / 8.0 + h_kn * foundation_depth
             else:
-                # Słup wspornikowy, utwierdzony w fundamencie — cała reakcja pozioma
-                # i moment (przy ramieniu do połowy wysokości ściany) trafiają do stopy
+                # Słup wspornikowy, utwierdzony w fundamencie, bez podparcia góry —
+                # cała reakcja pozioma i moment (ramię do połowy wysokości ściany)
+                # trafiają do stopy
                 h_kn = h_total_kn
                 arm_m = wall_height / 2 + foundation_depth
                 m_knm = h_kn * arm_m
